@@ -10,5 +10,6 @@ alter table storage.objects enable row level security;
 create function storage.foldername(name text) returns text[] language sql immutable as
   $$ select string_to_array(name, '/') $$;
 grant usage on schema auth, storage, public to anon, authenticated;
-alter default privileges in schema public grant all on tables to authenticated;
-alter default privileges in schema public grant all on sequences to authenticated;
+-- Como Supabase: todo privilegio por defecto a anon y authenticated (la migración 0007 debe quitarlo).
+alter default privileges in schema public grant all on tables to anon, authenticated;
+alter default privileges in schema public grant all on sequences to anon, authenticated;

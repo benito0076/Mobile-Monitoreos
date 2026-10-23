@@ -31,9 +31,12 @@ select pg_temp.ok((select count(*) from mediciones) = 1, 'reintento no duplica')
 select pg_temp.ok((select usuario_id from mediciones) = :A::uuid, 'usuario sellado por el servidor');
 
 -- inmutabilidad
-update mediciones set valor = '9';
-delete from mediciones;
-select pg_temp.ok((select valor from mediciones where id = '11111111-1111-1111-1111-111111111111') = '7.1', 'update/delete no alteran mediciones (RLS + trigger)');
+-- sin privilegio de UPDATE, DELETE ni TRUNCATE: se rechaza con error
+do $$ begin update mediciones set valor = '9'; raise exception 'debió fallar'; exception when insufficient_privilege then null; end $$;
+do $$ begin delete from mediciones; raise exception 'debió fallar'; exception when insufficient_privilege then null; end $$;
+do $$ begin truncate mediciones; raise exception 'debió fallar'; exception when insufficient_privilege then null; end $$;
+do $$ begin insert into auditoria (tabla, accion) values ('x', 'x'); raise exception 'debió fallar'; exception when insufficient_privilege then null; end $$;
+select pg_temp.ok((select valor from mediciones where id = '11111111-1111-1111-1111-111111111111') = '7.1', 'mediciones intactas');
 
 -- corrección: exige motivo y versión consecutiva
 do $$ begin
@@ -73,4 +76,8 @@ select pg_temp.ok((select count(*) from mediciones) = 0, 'A ya no ve el plan');
 select pg_temp.ok((select count(*) from auditoria) = 0, 'comisión no lee auditoría');
 select set_config('request.jwt.claim.sub', :O, false);
 select pg_temp.ok((select count(*) from auditoria) > 0, 'oficina lee auditoría');
+-- anon no tiene acceso a nada
+select set_config('request.jwt.claim.sub', '', false);
+reset role; set role anon;
+do $$ begin perform count(*) from planes; raise exception 'debió fallar'; exception when insufficient_privilege then null; end $$;
 \echo RLS OK
