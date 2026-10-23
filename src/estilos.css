@@ -21,3 +21,6 @@ textarea { width: 100%; box-sizing: border-box; font: inherit; }
 .sync { display: grid; gap: .5rem; margin-bottom: 1rem; }
 button.pendiente { background: #b45309; }
 button.secundario { background: #fff; color: #0b6e4f; border: 1px solid #0b6e4f; }
+.pestanas { display: flex; gap: .5rem; margin-bottom: 1rem; }
+.acciones { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+select { font: inherit; padding: .5rem; }

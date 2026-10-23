@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './datos/supabase'
 import { Login } from './ui/Login'
-import { CargarPlan } from './ui/oficina/CargarPlan'
-import { ExportarPlan } from './ui/oficina/ExportarPlan'
+import { PanelOficina } from './ui/oficina/PanelOficina'
 import { ElegirPlan } from './ui/campo/ElegirPlan'
 import { cerrarSiVencida } from './datos/sesion'
 import { ListaMuestras } from './ui/campo/ListaMuestras'
@@ -46,7 +45,7 @@ export function App() {
         <button onClick={() => supabase.auth.signOut()}>Salir</button>
       </header>
       {rol === 'comision' && planLocal && <Sincronizar />}
-      {rol === 'oficina' && <><CargarPlan /><ExportarPlan /></>}
+      {rol === 'oficina' && <PanelOficina yo={sesion.user.id} />}
       {rol === 'comision' && !planLocal && <ElegirPlan usuarioId={sesion.user.id} alTomar={leerLocal} />}
       {rol === 'comision' && planLocal && (abierta
         ? <FormMuestra id={abierta} usuario={sesion.user.id} volver={() => setAbierta(null)} />
