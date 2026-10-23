@@ -18,7 +18,10 @@ export interface Exportacion { resultados: Fila[]; fotos: Fila[]; historial: Fil
 
 const vigente = <T extends { version: number }>(a: T | undefined, b: T) => (!a || b.version > a.version ? b : a)
 
-/** Una fila por muestra y parámetro (valor vigente; vacío si aún no se midió), más fotos por código y el historial de versiones. */
+/**
+ * Una fila por muestra y parámetro IN SITU (valor vigente; vacío si aún no se midió), más fotos por código y el historial
+ * de versiones. Los parámetros de laboratorio no se exportan: el módulo Instrumental de Sampler solo necesita los de campo.
+ */
 export function construirExportacion(d: DatosPlan): Exportacion {
   const porMuestra = new Map(d.muestras.map((m) => [m.id, m]))
   const vig = new Map<string, DatosPlan['mediciones'][number]>()
@@ -29,7 +32,7 @@ export function construirExportacion(d: DatosPlan): Exportacion {
 
   const resultados = d.muestras
     .slice().sort((a, b) => a.codigo.localeCompare(b.codigo))
-    .flatMap((m) => d.parametros.filter((p) => p.muestra_id === m.id).map((p): Fila => {
+    .flatMap((m) => d.parametros.filter((p) => p.muestra_id === m.id && p.es_insitu).map((p): Fila => {
       const x = vig.get(`${m.id}\n${p.parametro}`)
       return {
         'Codigo muestra': m.codigo, 'Punto': m.punto_texto, 'Identificador punto': m.punto_codigo,

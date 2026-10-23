@@ -34,17 +34,18 @@ const pequeno: DatosPlan = {
 describe('exportador', () => {
   const e = construirExportacion(pequeno)
 
-  test('una fila por muestra y parámetro, ordenadas por código', () => {
+  test('una fila por muestra y parámetro in situ, ordenadas por código; los de laboratorio no salen', () => {
     expect(e.resultados.map((r) => [r['Codigo muestra'], r['Parametro']])).toEqual([
-      ['10500-26', 'pH'], ['10500-26', 'Agua - Temperatura '], ['10500-26', 'Agua - Acidez'], ['10501-26', 'pH'],
+      ['10500-26', 'pH'], ['10500-26', 'Agua - Temperatura '], ['10501-26', 'pH'],
     ])
+    expect(e.resultados.every((r) => r['In situ'] === 'Si')).toBe(true)
   })
 
   test('usa la versión vigente, deja vacío lo no medido y arrastra marca, muestreador y descripción', () => {
-    const [ph, temp, acidez, sinMedir] = e.resultados
+    const [ph, temp, sinMedir] = e.resultados
     expect(ph).toMatchObject({ Valor: '7.4', Version: 2, Marcada: 'Si', 'Motivo marca': 'Reloj desfasado', Muestreador: 'Comisión Norte', 'Descripcion del punto': 'Orilla norte', 'Estado muestra': 'cerrada' })
     expect(temp).toMatchObject({ Valor: '21', Unidad: '°C', Marcada: 'No' })
-    expect(acidez.Valor).toBeNull(); expect(sinMedir.Valor).toBeNull()
+    expect(sinMedir.Valor).toBeNull()
   })
 
   test('fotos por código de muestra y historial con todas las versiones', () => {
@@ -58,20 +59,21 @@ describe('exportador', () => {
     const libro = XLSX.read(bytes, { type: 'array' })
     expect(libro.SheetNames).toEqual(['Resultados', 'Fotos', 'Historial'])
     const filas = XLSX.utils.sheet_to_json<Record<string, unknown>>(libro.Sheets['Resultados'])
-    expect(filas).toHaveLength(4)
+    expect(filas).toHaveLength(3)
     expect(filas.map((f) => f['Parametro'])).toContain('Agua - Temperatura ')
   })
 })
 
 describe('con el plan de ejemplo', () => {
-  test('738 filas: 15 muestras con 50 o 47 parámetros', () => {
+  test('75 filas: de 738 parámetros solo salen los 5 in situ de cada una de las 15 muestras', () => {
+    const IN_SITU = ['pH', 'Agua - Temperatura ', 'Agua - Oxígeno Disuelto ', 'Agua - Conductividad a 25°C In Situ - Puntual', 'Agua - Caudal > 2 m3/s y < 10 m3/s']
     const m = leerPlan(readFileSync('fixtures/Prueba_Items.xls'))
     const ids = m.map((x, i) => ({ ...x, id: `m${i}`, estado: 'pendiente' }))
     const r = construirExportacion({
       plan: { nombre: 'Prueba' }, usuarios: {}, mediciones: [], descripciones: [], fotos: [],
-      muestras: ids, parametros: ids.flatMap((x) => x.parametros.map((p) => ({ muestra_id: x.id, parametro: p, es_insitu: false }))),
+      muestras: ids, parametros: ids.flatMap((x) => x.parametros.map((p) => ({ muestra_id: x.id, parametro: p, es_insitu: IN_SITU.includes(p) }))),
     })
-    expect(r.resultados).toHaveLength(11 * 50 + 4 * 47)
+    expect(r.resultados).toHaveLength(15 * 5)
     expect(new Set(r.resultados.map((x) => x['Codigo muestra'])).size).toBe(15)
   })
 })

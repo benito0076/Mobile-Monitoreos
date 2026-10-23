@@ -44,7 +44,7 @@ export function PlanesOficina() {
       const { nombre, bytes } = exportarPlan(datos)
       const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([bytes])), download: nombre })
       a.click(); URL.revokeObjectURL(a.href)
-      setEstado(`${nombre}: ${resultados.length} filas, ${fotos.length} fotos, ${resultados.filter((r) => r['Marcada'] === 'Si').length} mediciones marcadas.`)
+      setEstado(`${nombre}: ${resultados.length} filas in situ (${resultados.filter((r) => r['Valor'] === null).length} sin medir), ${fotos.length} fotos, ${resultados.filter((r) => r['Marcada'] === 'Si').length} mediciones marcadas.`)
     } catch (e) { setEstado(`No se pudo exportar: ${(e as Error).message}`) }
   }
 
