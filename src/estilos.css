@@ -10,3 +10,5 @@ table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .9rem
 td, th { border: 1px solid #ccc; padding: .3rem .5rem; text-align: left; }
 .error { color: #b00020; }
 .aviso { color: #8a5a00; }
+.planes { list-style: none; padding: 0; display: grid; gap: .5rem; }
+.planes li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border: 1px solid #ccc; border-radius: .4rem; padding: .5rem .75rem; }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../datos/supabase'
+import { marcarInicioSesion } from '../datos/sesion'
 
 export function Login() {
   const [correo, setCorreo] = useState('')
@@ -10,6 +11,7 @@ export function Login() {
     e.preventDefault()
     const { error } = await supabase.auth.signInWithPassword({ email: correo, password: clave })
     if (error) setError('Correo o contraseña incorrectos')
+    else marcarInicioSesion()
   }
 
   return (

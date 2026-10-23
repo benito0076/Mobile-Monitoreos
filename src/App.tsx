@@ -3,13 +3,25 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from './datos/supabase'
 import { Login } from './ui/Login'
 import { CargarPlan } from './ui/oficina/CargarPlan'
+import { ElegirPlan } from './ui/campo/ElegirPlan'
+import { cerrarSiVencida } from './datos/sesion'
+import { local, type PlanLocal } from './datos/db-local'
 
 export function App() {
   const [sesion, setSesion] = useState<Session | null | undefined>(undefined)
   const [rol, setRol] = useState<string | null>(null)
+  const [planLocal, setPlanLocal] = useState<PlanLocal | undefined>()
+  const [nMuestras, setNMuestras] = useState(0)
+
+  const leerLocal = async () => {
+    const p = await local.planes.toCollection().first()
+    setPlanLocal(p)
+    setNMuestras(p ? await local.muestras.where('plan_id').equals(p.id).count() : 0)
+  }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSesion(data.session))
+    cerrarSiVencida().then(() => supabase.auth.getSession()).then(({ data }) => setSesion(data.session))
+    leerLocal()
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSesion(s))
     return () => data.subscription.unsubscribe()
   }, [])
@@ -29,7 +41,13 @@ export function App() {
         <button onClick={() => supabase.auth.signOut()}>Salir</button>
       </header>
       {rol === 'oficina' && <CargarPlan />}
-      {rol === 'comision' && <p>Elegir plan: pendiente (paso 5).</p>}
+      {rol === 'comision' && !planLocal && <ElegirPlan usuarioId={sesion.user.id} alTomar={leerLocal} />}
+      {rol === 'comision' && planLocal && (
+        <section>
+          <h2>{planLocal.nombre}</h2>
+          <p>{nMuestras} muestras descargadas. Lista de muestras: pendiente (paso 6).</p>
+        </section>
+      )}
       {rol === null && <p>Tu usuario no tiene perfil asignado. Pide a la oficina que lo cree.</p>}
     </main>
   )
