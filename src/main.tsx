@@ -1,3 +1,5 @@
 import { createRoot } from 'react-dom/client'
+import { App } from './App'
+import './estilos.css'
 
-createRoot(document.getElementById('root')!).render(<h1>Monitoreos de campo</h1>)
+createRoot(document.getElementById('root')!).render(<App />)

@@ -52,3 +52,16 @@ describe('validaciones', () => {
     expect(msgs).toContain('Parámetros repetidos')
   })
 })
+
+describe('guardar plan', () => {
+  test('envía el plan completo a cargar_plan y devuelve el id', async () => {
+    const { guardarPlan } = await import('../src/plan/guardar-plan')
+    let args: unknown
+    const db = { rpc: async (f: string, a: unknown) => ((args = [f, a]), { data: 'plan-1', error: null }) } as never
+    expect(await guardarPlan(db, 'P', 'p.xls', muestras)).toBe('plan-1')
+    expect((args as [string, { p_muestras: unknown[] }])[0]).toBe('cargar_plan')
+    expect((args as [string, { p_muestras: unknown[] }])[1].p_muestras).toHaveLength(15)
+    const mal = { rpc: async () => ({ data: null, error: { message: 'Solo la oficina carga planes' } }) } as never
+    await expect(guardarPlan(mal, 'P', 'p.xls', muestras)).rejects.toThrow('Solo la oficina')
+  })
+})
