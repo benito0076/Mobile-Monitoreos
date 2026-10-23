@@ -5,18 +5,20 @@ import { Login } from './ui/Login'
 import { CargarPlan } from './ui/oficina/CargarPlan'
 import { ElegirPlan } from './ui/campo/ElegirPlan'
 import { cerrarSiVencida } from './datos/sesion'
+import { ListaMuestras } from './ui/campo/ListaMuestras'
+import { FormMuestra } from './ui/campo/FormMuestra'
+import { medirDesfase } from './datos/reloj'
 import { local, type PlanLocal } from './datos/db-local'
 
 export function App() {
   const [sesion, setSesion] = useState<Session | null | undefined>(undefined)
   const [rol, setRol] = useState<string | null>(null)
   const [planLocal, setPlanLocal] = useState<PlanLocal | undefined>()
-  const [nMuestras, setNMuestras] = useState(0)
+  const [abierta, setAbierta] = useState<string | null>(null)
 
   const leerLocal = async () => {
     const p = await local.planes.toCollection().first()
     setPlanLocal(p)
-    setNMuestras(p ? await local.muestras.where('plan_id').equals(p.id).count() : 0)
   }
 
   useEffect(() => {
@@ -28,6 +30,7 @@ export function App() {
 
   useEffect(() => {
     if (!sesion) return setRol(null)
+    if (navigator.onLine) medirDesfase(supabase)
     supabase.from('perfiles').select('rol').eq('id', sesion.user.id).single().then(({ data }) => setRol(data?.rol ?? null))
   }, [sesion])
 
@@ -42,12 +45,9 @@ export function App() {
       </header>
       {rol === 'oficina' && <CargarPlan />}
       {rol === 'comision' && !planLocal && <ElegirPlan usuarioId={sesion.user.id} alTomar={leerLocal} />}
-      {rol === 'comision' && planLocal && (
-        <section>
-          <h2>{planLocal.nombre}</h2>
-          <p>{nMuestras} muestras descargadas. Lista de muestras: pendiente (paso 6).</p>
-        </section>
-      )}
+      {rol === 'comision' && planLocal && (abierta
+        ? <FormMuestra id={abierta} usuario={sesion.user.id} volver={() => setAbierta(null)} />
+        : <ListaMuestras plan={planLocal} abrir={setAbierta} />)}
       {rol === null && <p>Tu usuario no tiene perfil asignado. Pide a la oficina que lo cree.</p>}
     </main>
   )

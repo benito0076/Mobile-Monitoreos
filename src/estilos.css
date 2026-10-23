@@ -12,3 +12,9 @@ td, th { border: 1px solid #ccc; padding: .3rem .5rem; text-align: left; }
 .aviso { color: #8a5a00; }
 .planes { list-style: none; padding: 0; display: grid; gap: .5rem; }
 .planes li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border: 1px solid #ccc; border-radius: .4rem; padding: .5rem .75rem; }
+.medicion { display: block; }
+.medicion input { width: 100%; box-sizing: border-box; margin: .25rem 0; }
+.aviso { background: #fff4d6; padding: .5rem; border-radius: .4rem; }
+textarea { width: 100%; box-sizing: border-box; font: inherit; }
+.fotos { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+.fotos img { width: 6rem; height: 6rem; object-fit: cover; border-radius: .3rem; }

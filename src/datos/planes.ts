@@ -31,7 +31,10 @@ export async function descargarPlan(db: Db, plan: { id: string; nombre: string }
   const config = await todo<any>((a, b) => db.from('configuracion').select('*').range(a, b))
 
   await local.transaction('rw', [local.planes, local.muestras, local.muestraParametros, local.parametrosInsitu, local.config], async () => {
-    const ids = (await local.muestras.where('plan_id').equals(plan.id).primaryKeys()) as string[]
+    const previas = await local.muestras.where('plan_id').equals(plan.id).toArray()
+    const pendientes = new Map(previas.filter((m) => m.estado_pendiente).map((m) => [m.id, m]))
+    for (const m of muestras) if (pendientes.has(m.id)) Object.assign(m, { estado: pendientes.get(m.id)!.estado, estado_pendiente: 1 })
+    const ids = previas.map((m) => m.id)
     await local.muestraParametros.where('muestra_id').anyOf(ids).delete()
     await local.muestras.where('plan_id').equals(plan.id).delete()
     await local.planes.put({ id: plan.id, nombre: plan.nombre, comision_id: comisionId, descargado_en: new Date().toISOString() })
