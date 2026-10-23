@@ -8,6 +8,7 @@ import { cerrarSiVencida } from './datos/sesion'
 import { ListaMuestras } from './ui/campo/ListaMuestras'
 import { FormMuestra } from './ui/campo/FormMuestra'
 import { medirDesfase } from './datos/reloj'
+import { Sincronizar } from './ui/campo/Sincronizar'
 import { local, type PlanLocal } from './datos/db-local'
 
 export function App() {
@@ -43,6 +44,7 @@ export function App() {
         <span>{sesion.user.email} ({rol ?? '…'})</span>
         <button onClick={() => supabase.auth.signOut()}>Salir</button>
       </header>
+      {rol === 'comision' && planLocal && <Sincronizar />}
       {rol === 'oficina' && <CargarPlan />}
       {rol === 'comision' && !planLocal && <ElegirPlan usuarioId={sesion.user.id} alTomar={leerLocal} />}
       {rol === 'comision' && planLocal && (abierta

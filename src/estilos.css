@@ -18,3 +18,6 @@ td, th { border: 1px solid #ccc; padding: .3rem .5rem; text-align: left; }
 textarea { width: 100%; box-sizing: border-box; font: inherit; }
 .fotos { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
 .fotos img { width: 6rem; height: 6rem; object-fit: cover; border-radius: .3rem; }
+.sync { display: grid; gap: .5rem; margin-bottom: 1rem; }
+button.pendiente { background: #b45309; }
+button.secundario { background: #fff; color: #0b6e4f; border: 1px solid #0b6e4f; }

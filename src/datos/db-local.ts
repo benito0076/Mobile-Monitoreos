@@ -18,14 +18,15 @@ export interface MedicionLocal {
   usuario_id: string; equipo_id: string; version_app: string
   version: number; reemplaza_a: string | null; motivo_correccion: string | null
   sincronizado: number // 0 pendiente, 1 confirmado por el servidor
+  error_sync?: string // último rechazo del servidor para este registro
 }
 export interface DescripcionLocal {
   id: string; muestra_id: string; texto: string; hora_telefono: string; usuario_id: string
-  version: number; reemplaza_a: string | null; motivo_correccion: string | null; sincronizado: number
+  version: number; reemplaza_a: string | null; motivo_correccion: string | null; sincronizado: number; error_sync?: string
 }
 export interface FotoLocal {
   id: string; muestra_id: string; ruta_storage: string; blob: Blob
-  hora_telefono: string; lat: number | null; lon: number | null; usuario_id: string; sincronizado: number
+  hora_telefono: string; lat: number | null; lon: number | null; usuario_id: string; sincronizado: number; error_sync?: string
 }
 export interface ConfigLocal { clave: string; valor: number }
 
