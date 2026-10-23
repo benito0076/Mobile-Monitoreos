@@ -1,0 +1,26 @@
+body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; color: #1b1b1b; }
+main, .tarjeta { max-width: 64rem; margin: 0 auto; }
+.tarjeta { display: grid; gap: .75rem; max-width: 22rem; }
+label { display: grid; gap: .25rem; }
+input, button { font: inherit; padding: .6rem; }
+button { background: #0b6e4f; color: #fff; border: 0; border-radius: .4rem; cursor: pointer; }
+button:disabled { background: #999; cursor: not-allowed; }
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .9rem; }
+td, th { border: 1px solid #ccc; padding: .3rem .5rem; text-align: left; }
+.error { color: #b00020; }
+.aviso { color: #8a5a00; }
+.planes { list-style: none; padding: 0; display: grid; gap: .5rem; }
+.planes li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border: 1px solid #ccc; border-radius: .4rem; padding: .5rem .75rem; }
+.medicion { display: block; }
+.medicion input { width: 100%; box-sizing: border-box; margin: .25rem 0; }
+.aviso { background: #fff4d6; padding: .5rem; border-radius: .4rem; }
+textarea { width: 100%; box-sizing: border-box; font: inherit; }
+.fotos { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+.fotos img { width: 6rem; height: 6rem; object-fit: cover; border-radius: .3rem; }
+.sync { display: grid; gap: .5rem; margin-bottom: 1rem; }
+button.pendiente { background: #b45309; }
+button.secundario { background: #fff; color: #0b6e4f; border: 1px solid #0b6e4f; }
+.pestanas { display: flex; gap: .5rem; margin-bottom: 1rem; }
+.acciones { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+select { font: inherit; padding: .5rem; }
