@@ -6,7 +6,7 @@ type Db = Pick<SupabaseClient, 'from' | 'rpc'>
 
 const PAGINA = 1000 // tope por defecto de PostgREST
 
-async function todo<T>(consulta: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>) {
+export async function todo<T>(consulta: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>) {
   const filas: T[] = []
   for (let desde = 0; ; desde += PAGINA) {
     const { data, error } = await consulta(desde, desde + PAGINA - 1)
