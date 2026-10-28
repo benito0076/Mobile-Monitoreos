@@ -44,20 +44,20 @@ export function Usuarios({ yo }: { yo: string }) {
           <small>Anótala y entrégala ahora: no se vuelve a mostrar.</small> <button onClick={() => setClave(null)}>Listo</button>
         </div>
       )}
-      <table>
+      <div className="tabla"><table>
         <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead>
         <tbody>
           {perfiles.map((p) => (
             <tr key={p.id}>
               <td>{p.nombre}</td><td>{p.correo ?? '—'}</td><td>{p.rol}</td><td>{p.activo ? 'Activo' : 'Desactivado'}</td>
-              <td className="acciones">
+              <td><div className="acciones">
                 {p.id !== yo && <button className="secundario" onClick={() => accion({ accion: 'estado', id: p.id, activo: !p.activo }, () => {})}>{p.activo ? 'Desactivar' : 'Activar'}</button>}
                 <button className="secundario" onClick={() => confirm(`Generar una contraseña nueva para ${p.nombre}?`) && accion({ accion: 'clave', id: p.id }, (r) => setClave({ correo: p.correo ?? p.nombre, clave: r.clave }))}>Nueva contraseña</button>
-              </td>
+              </div></td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </section>
   )
 }

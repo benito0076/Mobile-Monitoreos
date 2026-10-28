@@ -51,7 +51,7 @@ export function CargarPlan() {
           {hallazgos.length === 0 ? <p>Sin observaciones.</p> : (
             <ul>{hallazgos.map((h, i) => <li key={i} className={h.nivel}><b>{h.codigo}</b>: {h.mensaje}</li>)}</ul>
           )}
-          <table>
+          <div className="tabla"><table>
             <thead><tr><th>Código</th><th>Punto</th><th>Identificador</th><th>Tipo</th><th>Matriz</th><th>Parámetros</th></tr></thead>
             <tbody>
               {muestras.map((m) => (
@@ -61,7 +61,7 @@ export function CargarPlan() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
           <button onClick={guardar} disabled={hayErrores || !nombre.trim()}>Guardar plan</button>
           {hayErrores && <p className="error">Corrige los errores del archivo antes de guardar.</p>}
         </>

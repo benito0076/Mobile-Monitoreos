@@ -52,14 +52,14 @@ export function PlanesOficina() {
     <section>
       <h2>Planes</h2>
       {estado && <p role="status">{estado}</p>}
-      <table>
+      <div className="tabla"><table>
         <thead><tr><th>Plan</th><th>Comisión</th><th>Acciones</th></tr></thead>
         <tbody>
           {planes.map((p) => (
             <tr key={p.id}>
               <td>{p.nombre}</td>
               <td>{nombreDe(p.comision_id)}</td>
-              <td className="acciones">
+              <td><div className="acciones">
                 <button onClick={() => exportar(p)}>Exportar</button>
                 {p.comision_id && <button className="secundario" onClick={() => liberar(p)}>Liberar</button>}
                 <select value={destino[p.id] ?? ''} onChange={(e) => setDestino({ ...destino, [p.id]: e.target.value })} aria-label={`Comisión para ${p.nombre}`}>
@@ -67,11 +67,11 @@ export function PlanesOficina() {
                   {comisiones.filter((c) => c.id !== p.comision_id).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
                 <button className="secundario" disabled={!destino[p.id]} onClick={() => reasignar(p)}>Reasignar</button>
-              </td>
+              </div></td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </section>
   )
 }

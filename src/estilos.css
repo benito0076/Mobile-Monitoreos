@@ -1,26 +1,94 @@
-body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; color: #1b1b1b; }
-main, .tarjeta { max-width: 64rem; margin: 0 auto; }
-.tarjeta { display: grid; gap: .75rem; max-width: 22rem; }
-label { display: grid; gap: .25rem; }
-input, button { font: inherit; padding: .6rem; }
-button { background: #0b6e4f; color: #fff; border: 0; border-radius: .4rem; cursor: pointer; }
-button:disabled { background: #999; cursor: not-allowed; }
-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .9rem; }
-td, th { border: 1px solid #ccc; padding: .3rem .5rem; text-align: left; }
-.error { color: #b00020; }
-.aviso { color: #8a5a00; }
-.planes { list-style: none; padding: 0; display: grid; gap: .5rem; }
-.planes li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border: 1px solid #ccc; border-radius: .4rem; padding: .5rem .75rem; }
-.medicion { display: block; }
-.medicion input { width: 100%; box-sizing: border-box; margin: .25rem 0; }
-.aviso { background: #fff4d6; padding: .5rem; border-radius: .4rem; }
-textarea { width: 100%; box-sizing: border-box; font: inherit; }
-.fotos { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
-.fotos img { width: 6rem; height: 6rem; object-fit: cover; border-radius: .3rem; }
-.sync { display: grid; gap: .5rem; margin-bottom: 1rem; }
-button.pendiente { background: #b45309; }
-button.secundario { background: #fff; color: #0b6e4f; border: 1px solid #0b6e4f; }
-.pestanas { display: flex; gap: .5rem; margin-bottom: 1rem; }
+/* Identidad de Ambienciq Ingenieros S.A.S: azul marino y verde lima del logo. */
+:root {
+  --azul: #000080;
+  --azul-oscuro: #00005a;
+  --azul-texto: #0d0b86;
+  --lima: #75fb00;
+  --fondo: #f4f5fb;
+  --borde: #d6d9ee;
+  --tinta: #181a33;
+  --suave: #5b5e7e;
+  --error: #b00020;
+  --radio: 10px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: var(--tinta); background: var(--fondo); line-height: 1.45; }
+main { max-width: 68rem; margin: 0 auto; padding: 1rem; }
+h1, h2, h3 { color: var(--azul); line-height: 1.2; }
+h2 { font-size: 1.35rem; margin: 1.25rem 0 .75rem; }
+h2::after { content: ''; display: block; width: 2.5rem; height: 4px; background: var(--lima); border-radius: 2px; margin-top: .35rem; }
+h3 { font-size: 1.05rem; margin: 1.5rem 0 .5rem; }
+small { color: var(--suave); }
+a { color: var(--azul); }
+
+/* Cabecera */
+.barra { background: #fff; border-bottom: 4px solid var(--lima); position: sticky; top: 0; z-index: 5; }
+.barra > div { max-width: 68rem; margin: 0 auto; padding: .5rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.logo { height: 2.1rem; width: auto; display: block; }
+.usuario { display: flex; align-items: center; gap: .6rem; font-size: .85rem; color: var(--suave); min-width: 0; }
+.usuario span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 11rem; }
+.usuario button { min-height: 2.25rem; padding: .3rem .8rem; }
+
+/* Inicio de sesión */
+.acceso { min-height: 100dvh; display: grid; place-items: center; padding: 1rem; }
+.tarjeta { background: #fff linear-gradient(var(--lima), var(--lima)) top / 100% 6px no-repeat; border-radius: 14px; padding-top: 1.9rem; box-shadow: 0 6px 24px rgba(0, 0, 128, .12); padding: 1.5rem; display: grid; gap: .85rem; width: 100%; max-width: 23rem; }
+.tarjeta .logo { height: auto; width: 100%; max-width: 17rem; margin: 0 auto .25rem; }
+.tarjeta h1 { font-size: 1.25rem; text-align: center; margin: 0; }
+.tarjeta p.sub { text-align: center; margin: 0; color: var(--suave); font-size: .9rem; }
+section > .tarjeta { box-shadow: none; border: 1px solid var(--borde); background-size: 100% 4px; padding-top: 1.5rem; margin-bottom: 1rem; }
+
+/* Formularios y botones (objetivos táctiles de 44 px) */
+label { display: grid; gap: .3rem; font-weight: 600; font-size: .9rem; color: var(--azul-texto); }
+input, select, textarea { font: inherit; font-weight: 400; color: var(--tinta); padding: .65rem .75rem; min-height: 2.75rem; border: 2px solid var(--borde); border-radius: 8px; background: #fff; width: 100%; }
+input[type=file] { border-style: dashed; background: #fff; padding: .55rem; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; border-color: var(--azul); box-shadow: 0 0 0 3px var(--lima); }
+button { font: inherit; font-weight: 600; min-height: 2.75rem; padding: .55rem 1.1rem; background: var(--azul); color: #fff; border: 2px solid var(--azul); border-radius: 8px; cursor: pointer; }
+button:hover:not(:disabled) { background: var(--azul-oscuro); border-color: var(--azul-oscuro); }
+button:focus-visible { outline: 3px solid var(--lima); outline-offset: 2px; }
+button:disabled { background: #c9cbe0; border-color: #c9cbe0; color: #fff; cursor: not-allowed; }
+button.secundario { background: #fff; color: var(--azul); border-color: var(--azul); }
+button.secundario:hover:not(:disabled) { background: #eceefb; }
+button.pendiente { background: var(--lima); border-color: var(--lima); color: var(--azul); }
+button.pendiente:hover:not(:disabled) { background: #66e000; border-color: #66e000; }
 .acciones { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
-select { font: inherit; padding: .5rem; }
+.acciones select { width: auto; min-width: 9rem; }
+.acciones button { min-height: 2.25rem; padding: .3rem .8rem; }
+
+/* Pestañas de la oficina */
+.pestanas { display: flex; gap: .25rem; margin: 1rem 0 .25rem; border-bottom: 2px solid var(--borde); overflow-x: auto; }
+.pestanas button { background: none; color: var(--suave); border: 0; border-bottom: 4px solid transparent; border-radius: 0; margin-bottom: -2px; white-space: nowrap; }
+.pestanas button:hover:not(:disabled) { background: none; color: var(--azul); }
+.pestanas button:not(.secundario) { color: var(--azul); border-bottom-color: var(--lima); }
+
+/* Listas, tablas y mensajes */
+.planes { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; }
+.planes > li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; background: #fff; border: 1px solid var(--borde); border-left: 5px solid var(--lima); border-radius: var(--radio); padding: .7rem .9rem; }
+.planes > li.medicion { display: block; }
+.medicion input { margin: .25rem 0; }
+.tabla { overflow-x: auto; background: #fff; border: 1px solid var(--borde); border-radius: var(--radio); margin: 1rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th { background: var(--azul); color: #fff; text-align: left; padding: .55rem .7rem; white-space: nowrap; }
+td { padding: .5rem .7rem; border-top: 1px solid var(--borde); vertical-align: middle; }
+tbody tr:nth-child(even) { background: #f7f8fd; }
+[role=status] { background: #fff; border: 1px solid var(--borde); border-left: 5px solid var(--azul); border-radius: 8px; padding: .6rem .8rem; margin: .75rem 0; }
+.error { color: var(--error); }
+p.error, [role=alert].error { background: #fdecee; border-radius: 8px; padding: .6rem .8rem; }
+.aviso { color: #6b4500; }
+div.aviso, [role=alert].aviso { background: #fff4d6; border-left: 5px solid #e0a100; border-radius: 8px; padding: .6rem .8rem; margin: .5rem 0; display: flex; flex-wrap: wrap; gap: .4rem; }
+.aviso ul { flex-basis: 100%; margin: 0 0 .25rem; padding-left: 1.1rem; }
+.aviso button { min-height: 2.5rem; padding: .3rem .9rem; }
+.estado { display: inline-block; padding: .05rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 700; background: #e6e8f5; color: var(--suave); }
+.estado.en_campo { background: var(--lima); color: var(--azul); }
+.estado.cerrada { background: var(--azul); color: #fff; }
+textarea { min-height: 5rem; }
+.fotos { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+.fotos img { width: 6rem; height: 6rem; object-fit: cover; border-radius: 8px; border: 2px solid var(--borde); }
+.sync { display: grid; gap: .5rem; margin: .75rem 0 1rem; }
+code { background: #eceefb; padding: .1rem .4rem; border-radius: 4px; font-size: 1.05rem; }
+
+@media (min-width: 40rem) {
+  .logo { height: 2.6rem; }
+  .usuario span { max-width: 20rem; }
+  .sync { grid-template-columns: auto auto 1fr; align-items: center; }
+  .sync [role=status] { margin: 0; }
+}

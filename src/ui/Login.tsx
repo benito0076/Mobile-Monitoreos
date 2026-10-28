@@ -15,12 +15,16 @@ export function Login() {
   }
 
   return (
+    <div className="acceso">
     <form onSubmit={entrar} className="tarjeta">
+      <img src="/logo.png" alt="Ambienciq Ingenieros S.A.S" className="logo" />
       <h1>Monitoreos de campo</h1>
+      <p className="sub">Ingresa con tu correo y contraseña</p>
       <label>Correo <input type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} required autoComplete="username" /></label>
       <label>Contraseña <input type="password" value={clave} onChange={(e) => setClave(e.target.value)} required autoComplete="current-password" /></label>
       {error && <p role="alert" className="error">{error}</p>}
       <button>Entrar</button>
     </form>
+    </div>
   )
 }

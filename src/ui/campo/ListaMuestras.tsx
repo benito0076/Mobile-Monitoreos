@@ -24,7 +24,7 @@ export function ListaMuestras({ plan, abrir }: { plan: PlanLocal; abrir: (id: st
       <ul className="planes">
         {filas.map(({ m, hechas, total }) => (
           <li key={m.id}>
-            <span><b>{m.codigo}</b> · {m.punto_codigo ?? m.punto_texto}<br /><small>{m.estado} · in situ {hechas}/{total}</small></span>
+            <span><b>{m.codigo}</b> · {m.punto_codigo ?? m.punto_texto}<br /><small><span className={`estado ${m.estado}`}>{m.estado.replace('_', ' ')}</span> · in situ {hechas}/{total}</small></span>
             <button onClick={() => abrir(m.id)}>Abrir</button>
           </li>
         ))}

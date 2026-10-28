@@ -39,11 +39,17 @@ export function App() {
   if (!sesion) return <Login />
 
   return (
-    <main>
-      <header>
-        <span>{sesion.user.email} ({rol ?? '…'})</span>
-        <button onClick={() => supabase.auth.signOut()}>Salir</button>
+    <>
+      <header className="barra">
+        <div>
+          <img src="/logo.png" alt="Ambienciq Ingenieros S.A.S" className="logo" />
+          <div className="usuario">
+            <span title={sesion.user.email}>{sesion.user.email}{rol ? ` · ${rol}` : ''}</span>
+            <button className="secundario" onClick={() => supabase.auth.signOut()}>Salir</button>
+          </div>
+        </div>
       </header>
+      <main>
       {rol === 'comision' && planLocal && <Sincronizar />}
       {rol === 'oficina' && <PanelOficina yo={sesion.user.id} />}
       {rol === 'comision' && !planLocal && <ElegirPlan usuarioId={sesion.user.id} alTomar={leerLocal} />}
@@ -51,6 +57,7 @@ export function App() {
         ? <FormMuestra id={abierta} usuario={sesion.user.id} volver={() => setAbierta(null)} />
         : <ListaMuestras plan={planLocal} abrir={setAbierta} />)}
       {rol === null && <p>Tu usuario no tiene perfil asignado. Pide a la oficina que lo cree.</p>}
-    </main>
+      </main>
+    </>
   )
 }

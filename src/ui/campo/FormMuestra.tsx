@@ -140,7 +140,7 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
   return (
     <section>
       <button onClick={volver}>← Muestras</button>
-      <h2>{muestra.codigo} <small>({muestra.estado})</small></h2>
+      <h2>{muestra.codigo} <span className={`estado ${muestra.estado}`}>{muestra.estado.replace('_', ' ')}</span></h2>
       <p>{muestra.punto_texto}</p>
 
       <h3>Mediciones in situ</h3>

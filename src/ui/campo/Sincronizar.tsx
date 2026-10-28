@@ -15,7 +15,10 @@ export function Sincronizar() {
   const nRef = useRef(0)
 
   useEffect(() => {
-    const sub = liveQuery(pendientes).subscribe((p) => { setN(p.total); nRef.current = p.total })
+    const sub = liveQuery(pendientes).subscribe((p) => { setN(p.total); nRef.current = p.total
+      // si aparecen pendientes, el aviso «Todo sincronizado.» ya no es cierto
+      if (p.total > 0) setMsg((m) => (m === 'Todo sincronizado.' ? '' : m))
+    })
     return () => sub.unsubscribe()
   }, [])
 
