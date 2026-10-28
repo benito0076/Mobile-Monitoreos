@@ -11,8 +11,8 @@ const med = (o: Partial<DatosPlan['mediciones'][number]>): DatosPlan['mediciones
 const pequeno: DatosPlan = {
   plan: { nombre: 'Plan 1' },
   muestras: [
-    { id: 'm2', codigo: '10501-26', punto_texto: 'B', punto_codigo: null, tipo: 'Puntual', matriz: 'AGUA', submatriz: 'S', estado: 'pendiente' },
-    { id: 'm1', codigo: '10500-26', punto_texto: 'A', punto_codigo: 'LAM2249-0035', tipo: 'Puntual', matriz: 'AGUA', submatriz: 'S', estado: 'cerrada' },
+    { id: 'm2', codigo: '10501-26', punto_texto: 'B', tipo: 'Puntual', matriz: 'AGUA', submatriz: 'S', estado: 'pendiente' },
+    { id: 'm1', codigo: '10500-26', punto_texto: 'A', tipo: 'Puntual', matriz: 'AGUA', submatriz: 'S', estado: 'cerrada' },
   ],
   parametros: [
     { muestra_id: 'm1', parametro: 'pH', es_insitu: true }, { muestra_id: 'm1', parametro: 'Agua - Temperatura ', es_insitu: true },
@@ -33,6 +33,11 @@ const pequeno: DatosPlan = {
 
 describe('exportador', () => {
   const e = construirExportacion(pequeno)
+
+  test('no exporta columna de identificador aparte: el punto va completo', () => {
+    expect(Object.keys(e.resultados[0])).toContain('Punto')
+    expect(Object.keys(e.resultados[0]).some((k) => /identificador/i.test(k))).toBe(false)
+  })
 
   test('una fila por muestra y parámetro in situ, ordenadas por código; los de laboratorio no salen', () => {
     expect(e.resultados.map((r) => [r['Codigo muestra'], r['Parametro']])).toEqual([

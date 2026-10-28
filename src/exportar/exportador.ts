@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx'
 
 export interface DatosPlan {
   plan: { nombre: string }
-  muestras: { id: string; codigo: string; punto_texto: string; punto_codigo: string | null; tipo: string | null; matriz: string | null; submatriz: string | null; estado: string }[]
+  muestras: { id: string; codigo: string; punto_texto: string; tipo: string | null; matriz: string | null; submatriz: string | null; estado: string }[]
   parametros: { muestra_id: string; parametro: string; es_insitu: boolean }[]
   mediciones: { id: string; muestra_id: string; parametro: string; valor: string; unidad: string; hora_telefono: string; lat: number | null; lon: number | null; precision_m: number | null; usuario_id: string | null; equipo_id: string | null; version: number; reemplaza_a: string | null; motivo_correccion: string | null; marcada: boolean; motivo_marca: string | null }[]
   descripciones: { muestra_id: string; texto: string; version: number }[]
@@ -35,7 +35,7 @@ export function construirExportacion(d: DatosPlan): Exportacion {
     .flatMap((m) => d.parametros.filter((p) => p.muestra_id === m.id && p.es_insitu).map((p): Fila => {
       const x = vig.get(`${m.id}\n${p.parametro}`)
       return {
-        'Codigo muestra': m.codigo, 'Punto': m.punto_texto, 'Identificador punto': m.punto_codigo,
+        'Codigo muestra': m.codigo, 'Punto': m.punto_texto,
         'Tipo': m.tipo, 'Matriz': m.matriz, 'Submatriz': m.submatriz, 'Estado muestra': m.estado,
         'Parametro': p.parametro, 'In situ': p.es_insitu ? 'Si' : 'No',
         'Valor': x?.valor ?? null, 'Unidad': x?.unidad || null, 'Fecha y hora toma': x?.hora_telefono ?? null,

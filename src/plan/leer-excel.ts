@@ -4,7 +4,6 @@ import * as XLSX from 'xlsx'
 export interface MuestraPlan {
   codigo: string
   punto_texto: string
-  punto_codigo: string | null
   tipo: string
   matriz: string
   submatriz: string
@@ -12,13 +11,7 @@ export interface MuestraPlan {
   parametros: string[]
 }
 
-const PUNTO_CODIGO = /LAM\s*(\d+)\s*-\s*(\d+)/i
 const texto = (v: unknown) => (v == null ? '' : String(v))
-
-function codigoPunto(punto: string): string | null {
-  const m = PUNTO_CODIGO.exec(punto)
-  return m ? `LAM${m[1]}-${m[2]}` : null
-}
 
 // Excel guarda la hora local sin zona; el laboratorio opera en Colombia (UTC-5, sin horario de verano).
 function fechaPlan(serial: unknown): string | null {
@@ -41,8 +34,7 @@ export function leerPlan(datos: ArrayBuffer | Uint8Array): MuestraPlan[] {
       const punto = texto(f[1])
       actual = {
         codigo, // exacto: es la llave con Sampler
-        punto_texto: punto,
-        punto_codigo: codigoPunto(punto),
+        punto_texto: punto, // el nombre completo, tal cual; incluye el LAM… cuando lo trae
         tipo: texto(f[2]),
         matriz: texto(f[7]),
         submatriz: texto(f[9]),

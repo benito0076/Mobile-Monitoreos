@@ -79,11 +79,11 @@ export function CargarPlan() {
             <ul>{hallazgos.map((h, i) => <li key={i} className={h.nivel}><b>{h.codigo}</b>: {h.mensaje}</li>)}</ul>
           )}
           <div className="tabla"><table>
-            <thead><tr><th>Código</th><th>Punto</th><th>Identificador</th><th>Tipo</th><th>Matriz</th><th>Parámetros</th></tr></thead>
+            <thead><tr><th>Código</th><th>Punto</th><th>Tipo</th><th>Matriz</th><th>Parámetros</th></tr></thead>
             <tbody>
               {muestras.map((m) => (
                 <tr key={m.codigo}>
-                  <td>{m.codigo}</td><td>{m.punto_texto}</td><td>{m.punto_codigo ?? '—'}</td>
+                  <td>{m.codigo}</td><td>{m.punto_texto}</td>
                   <td>{m.tipo}</td><td>{m.matriz} / {m.submatriz}</td><td>{m.parametros.length}</td>
                 </tr>
               ))}

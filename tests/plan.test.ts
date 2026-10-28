@@ -23,12 +23,12 @@ describe('lectura del .xls de ejemplo', () => {
     expect(muestras[0].parametros).toContain('Agua - Oxígeno Disuelto ')
   })
 
-  test('datos de la muestra y punto_codigo', () => {
+  test('datos de la muestra; el punto se conserva completo, con su identificador dentro del nombre', () => {
     const m = muestras[0]
     expect([m.tipo, m.matriz, m.submatriz]).toEqual(['Puntual', 'AGUA', 'Agua Superficial'])
     expect(m.punto_texto).toBe('Ciénaga Llanito - Punto 6 MSP –LAM2249- 0035')
-    expect(m.punto_codigo).toBe('LAM2249-0035')
-    expect(muestras[14].punto_codigo).toBe('LAM2249-0034')
+    expect(muestras[14].punto_texto).toBe('CIENAGA SAN SILVESTRE CENTRO MSP —LAM2249-0034')
+    expect('punto_codigo' in m).toBe(false)
     expect(m.fecha_planeada).toMatch(/^2026-/)
   })
 
@@ -39,11 +39,11 @@ describe('lectura del .xls de ejemplo', () => {
 
 describe('validaciones', () => {
   test('un punto sin identificador LAM no genera aviso: el identificador es solo parte del nombre', () => {
-    const m = { punto_texto: 'Río Cauca Puente', punto_codigo: null, tipo: '', matriz: '', submatriz: '', fecha_planeada: null, codigo: '11103-26', parametros: ['pH'] }
+    const m = { punto_texto: 'Río Cauca Puente', tipo: '', matriz: '', submatriz: '', fecha_planeada: null, codigo: '11103-26', parametros: ['pH'] }
     expect(validarPlan([m])).toEqual([])
   })
 
-  const base = { punto_texto: 'p', punto_codigo: 'LAM2249-0001', tipo: '', matriz: '', submatriz: '', fecha_planeada: null }
+  const base = { punto_texto: 'p', tipo: '', matriz: '', submatriz: '', fecha_planeada: null }
   test('duplicados, sin parámetros y caracteres raros', () => {
     const r = validarPlan([
       { ...base, codigo: '1-26', parametros: ['pH'] },
