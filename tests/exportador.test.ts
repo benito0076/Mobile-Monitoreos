@@ -31,6 +31,14 @@ const pequeno: DatosPlan = {
   usuarios: { u1: 'Comisión Norte' },
 }
 
+describe('exportador: dos integrantes', () => {
+  test('misma versión desde dos teléfonos: gana la lectura más reciente', () => {
+    const d: DatosPlan = { ...pequeno, muestras: [pequeno.muestras[1]], parametros: [pequeno.parametros[0]], descripciones: [], fotos: [],
+      mediciones: [med({ id: 'p1', valor: '7', hora_telefono: '2026-10-23T10:00:00Z' }), med({ id: 'p2', valor: '7.9', hora_telefono: '2026-10-23T10:05:00Z' }), med({ id: 'p3', valor: '6', hora_telefono: '2026-10-23T09:00:00Z' })] }
+    expect(construirExportacion(d).resultados[0]['Valor']).toBe('7.9')
+  })
+})
+
 describe('exportador: muestras compuestas', () => {
   const d: DatosPlan = {
     ...pequeno,

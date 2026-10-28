@@ -2,6 +2,7 @@
 \set O '''00000000-0000-0000-0000-00000000000f'''
 \set A '''00000000-0000-0000-0000-00000000000a'''
 \set B '''00000000-0000-0000-0000-00000000000b'''
+\set C '''00000000-0000-0000-0000-00000000000c'''
 
 -- helper de aserciones
 create function pg_temp.ok(c boolean, msg text) returns void language plpgsql as $$ begin if not c then raise exception 'FALLÓ: %', msg; end if; end $$;
@@ -110,6 +111,22 @@ select pg_temp.ok((select count(*) from mediciones) = 0, 'A ya no ve el plan');
 select pg_temp.ok((select count(*) from auditoria) = 0, 'comisión no lee auditoría');
 select set_config('request.jwt.claim.sub', :O, false);
 select pg_temp.ok((select count(*) from auditoria) > 0, 'oficina lee auditoría');
+-- dos integrantes: la oficina asigna a B (principal) y A (segundo); los dos ven y registran, C no
+select set_config('request.jwt.claim.sub', :O, false);
+select reasignar_plan(:'plan', :B::uuid, :A::uuid);
+do $$ begin perform reasignar_plan((select id from planes limit 1), '00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000b'); raise exception 'debió fallar'; exception when others then if sqlerrm like 'debió%' then raise; end if; end $$;
+select set_config('request.jwt.claim.sub', :A, false);
+select pg_temp.ok((select count(*) from mediciones) = 6, 'el segundo integrante ve los datos');
+select pg_temp.ok((select count(*) from planes where id = :'plan') = 1, 'el segundo integrante ve el plan');
+insert into mediciones (id, muestra_id, parametro, valor, hora_telefono) values ('55555555-5555-5555-5555-555555555555', :'muestra', 'Otro', '2', now());
+select pg_temp.ok(tomar_plan(:'plan'), 'el segundo integrante puede volver a tomar el plan');
+select pg_temp.ok((select comision_id = :B::uuid and comision_id_2 = :A::uuid from planes where id = :'plan'), 'tomar_plan no cambia quién es quién');
+select set_config('request.jwt.claim.sub', :C, false);
+select pg_temp.ok(not tomar_plan(:'plan'), 'un tercero no puede tomar el plan');
+select pg_temp.ok((select count(*) from mediciones) = 0 and (select count(*) from planes where id = :'plan') = 0, 'un tercero no ve nada');
+select set_config('request.jwt.claim.sub', :O, false);
+select liberar_plan(:'plan');
+select pg_temp.ok((select comision_id is null and comision_id_2 is null from planes where id = :'plan'), 'liberar quita a los dos integrantes');
 -- anon no tiene acceso a nada
 select set_config('request.jwt.claim.sub', '', false);
 reset role; set role anon;

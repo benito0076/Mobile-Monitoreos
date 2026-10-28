@@ -19,6 +19,7 @@ export function PlanesOficina() {
   const [planes, setPlanes] = useState<PlanDisponible[]>([])
   const [comisiones, setComisiones] = useState<Perfil[]>([])
   const [destino, setDestino] = useState<Record<string, string>>({})
+  const [destino2, setDestino2] = useState<Record<string, string>>({}) // segundo integrante (opcional)
   const [estado, setEstado] = useState('')
   const [editando, setEditando] = useState<string | null>(null) // plan cuyos datos de custodia se editan
   const [ficha, setFicha] = useState<FichaCustodia>({})
@@ -29,9 +30,10 @@ export function PlanesOficina() {
       .catch((e) => setEstado(e.message))
   useEffect(() => { cargar() }, [])
 
-  const nombreDe = (id: string | null) => (id ? comisiones.find((c) => c.id === id)?.nombre ?? 'Comisión inactiva' : 'Disponible')
+  const nombreDe = (id: string | null | undefined) => (id ? comisiones.find((c) => c.id === id)?.nombre ?? 'Comisión inactiva' : 'Disponible')
+  const equipoDe = (p: PlanDisponible) => (p.comision_id_2 ? `${nombreDe(p.comision_id)} y ${nombreDe(p.comision_id_2)}` : nombreDe(p.comision_id))
 
-  async function rpc(fn: 'liberar_plan' | 'reasignar_plan', args: Record<string, string>, ok: string) {
+  async function rpc(fn: 'liberar_plan' | 'reasignar_plan', args: Record<string, string | null>, ok: string) {
     const { error } = await supabase.rpc(fn, args)
     setEstado(error ? `No se pudo: ${error.message}` : ok)
     cargar()
@@ -44,8 +46,9 @@ export function PlanesOficina() {
 
   function reasignar(p: PlanDisponible) {
     const c = comisiones.find((x) => x.id === destino[p.id])
-    if (!c || !confirm(`Reasignar «${p.nombre}» a ${c.nombre}. La nueva comisión verá los datos ya enviados; lo pendiente en el teléfono anterior no podrá sincronizarse. ¿Reasignar?`)) return
-    rpc('reasignar_plan', { p_plan: p.id, p_comision: c.id }, `«${p.nombre}» reasignado a ${c.nombre}.`)
+    const c2 = comisiones.find((x) => x.id === destino2[p.id])
+    if (!c || !confirm(`Asignar «${p.nombre}» a ${c.nombre}${c2 ? ` y ${c2.nombre}` : ''}. Los nuevos integrantes verán los datos ya enviados; lo pendiente en los teléfonos de quienes dejan el plan no podrá sincronizarse. ¿Asignar?`)) return
+    rpc('reasignar_plan', { p_plan: p.id, p_comision: c.id, p_comision_2: c2?.id ?? null }, `«${p.nombre}» asignado a ${c.nombre}${c2 ? ` y ${c2.nombre}` : ''}.`)
   }
 
   function editarFicha(p: PlanDisponible) { setFicha(p.ficha ?? {}); setEditando(editando === p.id ? null : p.id) }
@@ -89,17 +92,21 @@ export function PlanesOficina() {
           {planes.flatMap((p) => [
             <tr key={p.id}>
               <td>{p.nombre}</td>
-              <td>{nombreDe(p.comision_id)}</td>
+              <td>{equipoDe(p)}</td>
               <td><div className="acciones">
                 <button onClick={() => exportar(p)}>Exportar</button>
                 <button className="secundario" onClick={() => custodia(p)}>Cadena de custodia</button>
                 <button className="secundario" onClick={() => editarFicha(p)}>Datos de custodia</button>
                 {p.comision_id && <button className="secundario" onClick={() => liberar(p)}>Liberar</button>}
-                <select value={destino[p.id] ?? ''} onChange={(e) => setDestino({ ...destino, [p.id]: e.target.value })} aria-label={`Comisión para ${p.nombre}`}>
-                  <option value="">Reasignar a…</option>
-                  {comisiones.filter((c) => c.id !== p.comision_id).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                <select value={destino[p.id] ?? ''} onChange={(e) => setDestino({ ...destino, [p.id]: e.target.value })} aria-label={`Integrante 1 para ${p.nombre}`}>
+                  <option value="">Asignar a…</option>
+                  {comisiones.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
-                <button className="secundario" disabled={!destino[p.id]} onClick={() => reasignar(p)}>Reasignar</button>
+                <select value={destino2[p.id] ?? ''} onChange={(e) => setDestino2({ ...destino2, [p.id]: e.target.value })} aria-label={`Integrante 2 para ${p.nombre}`}>
+                  <option value="">Segundo integrante (opcional)</option>
+                  {comisiones.filter((c) => c.id !== destino[p.id]).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+                <button className="secundario" disabled={!destino[p.id]} onClick={() => reasignar(p)}>Asignar</button>
               </div></td>
             </tr>,
             editando === p.id && (

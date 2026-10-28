@@ -38,7 +38,7 @@ export function ElegirPlan({ usuarioId, descargados, alTomar, alVolver }: {
           <li key={p.id}>
             <span>{p.nombre}{descargados.includes(p.id) && <> <span className="estado en_campo">en este teléfono</span></>}</span>
             <button onClick={() => elegir(p)} disabled={ocupado}>
-              {p.comision_id !== usuarioId ? 'Tomar este plan' : descargados.includes(p.id) ? 'Actualizar' : 'Descargar'}
+              {![p.comision_id, p.comision_id_2].includes(usuarioId) ? 'Tomar este plan' : descargados.includes(p.id) ? 'Actualizar' : 'Descargar'}
             </button>
           </li>
         ))}

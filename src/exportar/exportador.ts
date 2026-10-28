@@ -16,7 +16,9 @@ type Fila = Record<string, string | number | boolean | null>
 
 export interface Exportacion { resultados: Fila[]; fotos: Fila[]; historial: Fila[] }
 
-const vigente = <T extends { version: number }>(a: T | undefined, b: T) => (!a || b.version > a.version ? b : a)
+// Dos integrantes pueden registrar el mismo dato desde teléfonos distintos: con la misma versión gana la lectura más reciente.
+const vigente = <T extends { version: number; hora_telefono?: string }>(a: T | undefined, b: T) =>
+  !a || b.version > a.version || (b.version === a.version && (b.hora_telefono ?? '') > (a.hora_telefono ?? '')) ? b : a
 
 /**
  * Una fila por muestra y parámetro IN SITU (valor vigente; vacío si aún no se midió); en muestras compuestas, una por
