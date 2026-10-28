@@ -21,6 +21,14 @@ select set_config('request.jwt.claim.sub', :B, false);
 select pg_temp.ok(not tomar_plan(:'plan'), 'B no puede tomar un plan ya tomado');
 select pg_temp.ok((select count(*) from muestras) = 0, 'B no ve muestras del plan de A');
 
+-- A puede volver a tomar su propio plan (reintento / teléfono nuevo) sin cambiar la fecha de toma; B sigue sin poder
+select set_config('request.jwt.claim.sub', :A, false);
+select tomado_en as t0 from planes where id = :'plan' \gset
+select pg_temp.ok(tomar_plan(:'plan'), 'A puede volver a tomar su propio plan');
+select pg_temp.ok((select tomado_en = :'t0'::timestamptz from planes where id = :'plan'), 'la fecha de toma no cambia');
+select set_config('request.jwt.claim.sub', :B, false);
+select pg_temp.ok(not tomar_plan(:'plan'), 'B sigue sin poder tomar el plan de A');
+
 -- A registra; upsert idempotente (ON CONFLICT DO NOTHING)
 select set_config('request.jwt.claim.sub', :A, false);
 insert into mediciones (id, muestra_id, parametro, valor, hora_telefono)
