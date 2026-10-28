@@ -12,15 +12,24 @@ async function sello(usuario_id: string, gps: Gps | null) {
   }
 }
 
-/** Medición vigente (mayor versión) de cada parámetro de una muestra. */
+/** Las muestras compuestas se miden por alícuota (columna Tipo del plan). */
+export const esCompuesta = (m: { tipo: string | null }) => m.tipo?.trim().toLowerCase() === 'compuesta'
+
+/** Clave de una medición dentro de su muestra: el parámetro, y la alícuota si la muestra es compuesta. */
+export const claveMedicion = (parametro: string, alicuota?: number | null) => (alicuota ? `${parametro}\n${alicuota}` : parametro)
+
+/** Medición vigente (mayor versión) de cada parámetro (y alícuota) de una muestra, por claveMedicion. */
 export async function vigentes(muestra_id: string) {
   const todas = await local.mediciones.where('muestra_id').equals(muestra_id).toArray()
   const m = new Map<string, MedicionLocal>()
-  for (const x of todas) if (!m.has(x.parametro) || m.get(x.parametro)!.version < x.version) m.set(x.parametro, x)
+  for (const x of todas) {
+    const k = claveMedicion(x.parametro, x.alicuota)
+    if (!m.has(k) || m.get(k)!.version < x.version) m.set(k, x)
+  }
   return m
 }
 
-interface Entrada { muestra_id: string; parametro: string; valor: string; unidad: string; usuario_id: string; gps: Gps | null }
+interface Entrada { muestra_id: string; parametro: string; alicuota?: number | null; valor: string; unidad: string; usuario_id: string; gps: Gps | null }
 
 /** Primera medición de un parámetro. Queda cerrada: cambiarla es una corrección. */
 export async function guardarMedicion(e: Entrada) {
@@ -29,9 +38,9 @@ export async function guardarMedicion(e: Entrada) {
   const s = await sello(e.usuario_id, e.gps)
   // Revisar y escribir en una sola transacción: dos envíos simultáneos no duplican.
   return local.transaction('rw', local.mediciones, async () => {
-    if ((await vigentes(e.muestra_id)).has(e.parametro)) throw new Error('Ese parámetro ya tiene medición; usa corrección')
+    if ((await vigentes(e.muestra_id)).has(claveMedicion(e.parametro, e.alicuota))) throw new Error('Ese parámetro ya tiene medición; usa corrección')
     const r: MedicionLocal = {
-      id: crypto.randomUUID(), muestra_id: e.muestra_id, parametro: e.parametro, valor: String(n), unidad: e.unidad,
+      id: crypto.randomUUID(), muestra_id: e.muestra_id, parametro: e.parametro, alicuota: e.alicuota ?? null, valor: String(n), unidad: e.unidad,
       version: 1, reemplaza_a: null, motivo_correccion: null, ...s,
     }
     await local.mediciones.add(r)
@@ -46,10 +55,10 @@ export async function corregirMedicion(e: Entrada & { motivo: string }) {
   if (!e.motivo.trim()) throw new Error('El motivo de la corrección es obligatorio')
   const s = await sello(e.usuario_id, e.gps)
   return local.transaction('rw', local.mediciones, async () => {
-    const previa = (await vigentes(e.muestra_id)).get(e.parametro)
+    const previa = (await vigentes(e.muestra_id)).get(claveMedicion(e.parametro, e.alicuota))
     if (!previa) throw new Error('No hay medición que corregir')
     const r: MedicionLocal = {
-      id: crypto.randomUUID(), muestra_id: e.muestra_id, parametro: e.parametro, valor: String(n), unidad: e.unidad,
+      id: crypto.randomUUID(), muestra_id: e.muestra_id, parametro: e.parametro, alicuota: e.alicuota ?? null, valor: String(n), unidad: e.unidad,
       version: previa.version + 1, reemplaza_a: previa.id, motivo_correccion: e.motivo.trim(), ...s,
     }
     await local.mediciones.add(r)

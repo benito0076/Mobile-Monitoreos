@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { local, type DescripcionLocal, type FotoLocal, type MedicionLocal, type MuestraLocal, type ParametroInsitu } from '../../datos/db-local'
-import { cambiarEstado, corregirMedicion, descripcionVigente, guardarDescripcion, guardarFoto, guardarMedicion, vigentes } from '../../datos/mediciones'
+import { cambiarEstado, claveMedicion, corregirMedicion, esCompuesta, descripcionVigente, guardarDescripcion, guardarFoto, guardarMedicion, vigentes } from '../../datos/mediciones'
 import { advertencias, parsearValor } from '../../datos/validar-medicion'
 import { leerGps } from '../../datos/gps'
 import { comprimir } from '../../datos/fotos'
@@ -9,8 +9,8 @@ import type { Gps } from '../../datos/db-local'
 
 type Aviso = { n: number; gps: Gps | null; adv: string[] }
 
-function FilaMedicion({ muestra, nombre, info, actual, usuario, umbral, alGuardar }: {
-  muestra: string; nombre: string; info?: ParametroInsitu; actual?: MedicionLocal; usuario: string; umbral: number; alGuardar: () => void
+function FilaMedicion({ muestra, nombre, alicuota, info, actual, usuario, umbral, alGuardar }: {
+  muestra: string; nombre: string; alicuota?: number; info?: ParametroInsitu; actual?: MedicionLocal; usuario: string; umbral: number; alGuardar: () => void
 }) {
   const [valor, setValor] = useState('')
   const [motivo, setMotivo] = useState('')
@@ -23,7 +23,7 @@ function FilaMedicion({ muestra, nombre, info, actual, usuario, umbral, alGuarda
 
   async function guardar(n: number, gps: Gps | null) {
     try {
-      const e = { muestra_id: muestra, parametro: nombre, valor: String(n), unidad, usuario_id: usuario, gps }
+      const e = { muestra_id: muestra, parametro: nombre, alicuota, valor: String(n), unidad, usuario_id: usuario, gps }
       if (corrigiendo) await corregirMedicion({ ...e, motivo }); else await guardarMedicion(e)
       setAviso(null); setCorrigiendo(false); setValor(''); setMotivo(''); setError(''); alGuardar()
     } catch (x) { setError((x as Error).message) }
@@ -92,11 +92,13 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
   const [motivoDesc, setMotivoDesc] = useState('')
   const [editDesc, setEditDesc] = useState(false)
   const [msg, setMsg] = useState('')
+  const [abiertas, setAbiertas] = useState(1) // alícuotas mostradas (las vacías no se guardan)
   const descEnCurso = useRef(false)
 
   const cargar = useCallback(async () => {
     setMuestra(await local.muestras.get(id))
-    setMed(await vigentes(id)); setDesc(await descripcionVigente(id))
+    const v = await vigentes(id)
+    setMed(v); setAbiertas((n) => Math.max(n, ...[...v.values()].map((x) => x.alicuota ?? 0))); setDesc(await descripcionVigente(id))
     setFotos(await local.fotos.where('muestra_id').equals(id).toArray())
   }, [id])
 
@@ -128,15 +130,19 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
     } catch (x) { setMsg(`No se guardó la foto: ${(x as Error).message}`) }
   }
 
+  const alicuotas: (number | undefined)[] = muestra && esCompuesta(muestra) ? Array.from({ length: abiertas }, (_, i) => i + 1) : [undefined]
+
   async function cerrar() {
-    const faltan = params.filter((p) => insitu.get(p)?.obligatorio && !med.has(p))
-    const avisos = [...faltan.map((p) => `Falta medir: ${p.trim()}`), ...(desc ? [] : ['Falta la descripción del punto'])]
+    const faltan = alicuotas.flatMap((a) => params.filter((p) => insitu.get(p)?.obligatorio && !med.has(claveMedicion(p, a)))
+      .map((p) => `Falta medir: ${p.trim()}${a ? ` (alícuota ${a})` : ''}`))
+    const avisos = [...faltan, ...(desc ? [] : ['Falta la descripción del punto'])]
     if (avisos.length && !confirm(`${avisos.join('\n')}\n\nUna muestra cerrada no se reabre. ¿Cerrarla así?`)) return
     await cambiarEstado(id, 'cerrada'); cargar()
   }
 
   if (!muestra) return null
   const cerrada = muestra.estado === 'cerrada'
+  const compuesta = esCompuesta(muestra)
   return (
     <section>
       <button onClick={volver}>← Muestras</button>
@@ -144,9 +150,15 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
       <p>{muestra.punto_texto}</p>
 
       <h3>Mediciones in situ</h3>
-      <ul className="planes">
-        {params.map((p) => <FilaMedicion key={p} muestra={id} nombre={p} info={insitu.get(p)} actual={med.get(p)} usuario={usuario} umbral={umbral} alGuardar={cargar} />)}
-      </ul>
+      {alicuotas.map((a) => (
+        <div key={a ?? 0}>
+          {compuesta && <h4>Alícuota {a}</h4>}
+          <ul className="planes">
+            {params.map((p) => <FilaMedicion key={p} muestra={id} nombre={p} alicuota={a} info={insitu.get(p)} actual={med.get(claveMedicion(p, a))} usuario={usuario} umbral={umbral} alGuardar={cargar} />)}
+          </ul>
+        </div>
+      ))}
+      {compuesta && !cerrada && <button className="secundario" onClick={() => setAbiertas(abiertas + 1)}>+ Agregar alícuota</button>}
 
       <h3>Descripción del punto</h3>
       {desc && !editDesc ? (

@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { local, metaSet } from '../src/datos/db-local'
-import { cambiarEstado, corregirMedicion, guardarDescripcion, guardarFoto, guardarMedicion, vigentes } from '../src/datos/mediciones'
+import { cambiarEstado, corregirMedicion, guardarDescripcion, guardarFoto, claveMedicion, guardarMedicion, vigentes } from '../src/datos/mediciones'
 import { advertencias, parsearValor } from '../src/datos/validar-medicion'
 
 const gps = { lat: 7.1, lon: -73.1, precision_m: 8 }
@@ -10,6 +10,19 @@ const base = { muestra_id: 'm1', parametro: 'pH', unidad: 'u', usuario_id: 'u1',
 beforeEach(async () => {
   await Promise.all(local.tables.map((t) => t.clear()))
   await local.muestras.add({ id: 'm1', plan_id: 'p1', codigo: '10500-26', punto_texto: 'P', punto_codigo: null, tipo: null, matriz: null, submatriz: null, fecha_planeada: null, estado: 'pendiente' })
+})
+
+describe('alícuotas (muestras compuestas)', () => {
+  test('cada alícuota tiene su propia medición y su propia cadena de correcciones', async () => {
+    await guardarMedicion({ ...base, alicuota: 1, valor: '7' })
+    await guardarMedicion({ ...base, alicuota: 2, valor: '7.5' }) // mismo parámetro, otra alícuota: no es duplicado
+    await expect(guardarMedicion({ ...base, alicuota: 2, valor: '8' })).rejects.toThrow('corrección')
+    const c = await corregirMedicion({ ...base, alicuota: 2, valor: '7.6', motivo: 'lectura' })
+    expect(c).toMatchObject({ alicuota: 2, version: 2 })
+    const v = await vigentes('m1')
+    expect([v.get(claveMedicion('pH', 1))!.valor, v.get(claveMedicion('pH', 2))!.valor]).toEqual(['7', '7.6'])
+    await expect(corregirMedicion({ ...base, alicuota: 3, valor: '7', motivo: 'x' })).rejects.toThrow('No hay medición')
+  })
 })
 
 describe('mediciones', () => {

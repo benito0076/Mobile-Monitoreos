@@ -31,6 +31,29 @@ const pequeno: DatosPlan = {
   usuarios: { u1: 'Comisión Norte' },
 }
 
+describe('exportador: muestras compuestas', () => {
+  const d: DatosPlan = {
+    ...pequeno,
+    muestras: [{ id: 'c1', codigo: '11103-26', punto_texto: 'Vertimiento', tipo: 'Compuesta', matriz: 'AGUA', submatriz: 'S', estado: 'en_campo' }],
+    parametros: [{ muestra_id: 'c1', parametro: 'pH', es_insitu: true }, { muestra_id: 'c1', parametro: 'T', es_insitu: true }],
+    mediciones: [
+      med({ id: 'a1', muestra_id: 'c1', alicuota: 1, valor: '7' }), med({ id: 'a2', muestra_id: 'c1', alicuota: 1, parametro: 'T', valor: '20' }),
+      med({ id: 'b1', muestra_id: 'c1', alicuota: 2, valor: '7.2' }),
+      med({ id: 'b2', muestra_id: 'c1', alicuota: 2, valor: '7.3', version: 2, reemplaza_a: 'b1', motivo_correccion: 'lectura' }),
+    ],
+    descripciones: [], fotos: [],
+  }
+  const r = construirExportacion(d).resultados
+
+  test('una fila por parámetro y alícuota; lo no medido de una alícuota sale vacío', () => {
+    expect(r.map((x) => [x['Alicuota'], x['Parametro'], x['Valor']])).toEqual([[1, 'pH', '7'], [1, 'T', '20'], [2, 'pH', '7.3'], [2, 'T', null]])
+  })
+
+  test('el historial distingue la alícuota', () => {
+    expect(construirExportacion(d).historial.filter((h) => h['Parametro'] === 'pH').map((h) => [h['Alicuota'], h['Version']])).toEqual([[1, 1], [2, 1], [2, 2]])
+  })
+})
+
 describe('exportador', () => {
   const e = construirExportacion(pequeno)
 
@@ -43,7 +66,7 @@ describe('exportador', () => {
     expect(e.resultados.map((r) => [r['Codigo muestra'], r['Parametro']])).toEqual([
       ['10500-26', 'pH'], ['10500-26', 'Agua - Temperatura '], ['10501-26', 'pH'],
     ])
-    expect(e.resultados.every((r) => r['In situ'] === 'Si')).toBe(true)
+    expect(e.resultados.every((r) => r['In situ'] === 'Si' && r['Alicuota'] === null)).toBe(true) // puntuales: sin alícuota
   })
 
   test('usa la versión vigente, deja vacío lo no medido y arrastra marca, muestreador y descripción', () => {

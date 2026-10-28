@@ -12,7 +12,7 @@ export interface Gps { lat: number; lon: number; precision_m: number }
 
 // Los campos coinciden con las columnas del servidor para poder enviarlos tal cual (sin `sincronizado`).
 export interface MedicionLocal {
-  id: string; muestra_id: string; parametro: string; valor: string; unidad: string
+  id: string; muestra_id: string; parametro: string; alicuota?: number | null; valor: string; unidad: string // alicuota: solo muestras compuestas
   hora_telefono: string; desfase_reloj_s: number | null
   lat: number | null; lon: number | null; precision_m: number | null
   usuario_id: string; equipo_id: string; version_app: string

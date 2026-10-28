@@ -66,6 +66,20 @@ do $$ begin
 insert into mediciones (id, muestra_id, parametro, valor, hora_telefono, version, reemplaza_a, motivo_correccion)
   values ('22222222-2222-2222-2222-222222222222', :'muestra', 'pH', '7.3', now(), 2, '11111111-1111-1111-1111-111111111111', 'error de lectura');
 
+-- alícuotas: la cadena de versiones es por muestra + parámetro + alícuota
+insert into mediciones (id, muestra_id, parametro, alicuota, valor, hora_telefono) values
+  ('44444444-4444-4444-4444-444444444441', :'muestra', 'pH', 1, '7', now()),
+  ('44444444-4444-4444-4444-444444444442', :'muestra', 'pH', 2, '7.5', now());
+do $$ begin
+  insert into mediciones (id, muestra_id, parametro, alicuota, valor, hora_telefono, version, reemplaza_a, motivo_correccion)
+  values (gen_random_uuid(), (select id from muestras), 'pH', 1, '9', now(), 2, '44444444-4444-4444-4444-444444444442', 'x');
+  raise exception 'debió fallar'; exception when others then if sqlerrm like 'debió%' then raise; end if; end $$;
+insert into mediciones (id, muestra_id, parametro, alicuota, valor, hora_telefono, version, reemplaza_a, motivo_correccion)
+  values (gen_random_uuid(), :'muestra', 'pH', 2, '7.6', now(), 2, '44444444-4444-4444-4444-444444444442', 'lectura');
+do $$ begin
+  insert into mediciones (id, muestra_id, parametro, alicuota, valor, hora_telefono) values (gen_random_uuid(), (select id from muestras), 'pH', 0, '1', now());
+  raise exception 'debió fallar'; exception when others then if sqlerrm like 'debió%' then raise; end if; end $$;
+
 -- marca por reloj desfasado (no se rechaza)
 insert into mediciones (id, muestra_id, parametro, valor, hora_telefono, desfase_reloj_s)
   values ('33333333-3333-3333-3333-333333333333', :'muestra', 'Otro', '1', now(), 400);
@@ -88,7 +102,7 @@ do $$ begin update muestras set codigo = 'otro'; raise exception 'debió fallar'
 select set_config('request.jwt.claim.sub', :O, false);
 select reasignar_plan(:'plan', :B::uuid);
 select set_config('request.jwt.claim.sub', :B, false);
-select pg_temp.ok((select count(*) from mediciones) = 3, 'B ve los datos tras la reasignación');
+select pg_temp.ok((select count(*) from mediciones) = 6, 'B ve los datos tras la reasignación');
 select set_config('request.jwt.claim.sub', :A, false);
 select pg_temp.ok((select count(*) from mediciones) = 0, 'A ya no ve el plan');
 
