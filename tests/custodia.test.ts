@@ -38,12 +38,12 @@ describe('cadena de custodia', () => {
     descripciones: [], fotos: [], usuarios: { u1: 'Usuario Prueba' },
   }
 
-  test('arma los datos: solo laboratorio, código del muestreo desde el nombre del plan, fechas de la medición', () => {
+  test('arma los datos: solo laboratorio, código del muestreo desde el nombre del plan, fechas de la medición y en blanco si no hay', () => {
     const c = armarCustodia(d, { cliente: 'ACME' })
     expect(c.ficha).toMatchObject({ cliente: 'ACME', codigo_muestreo: '1128-26' })
     expect(c.muestras[0].parametros).not.toContain('Agua - pH Compuesto')
     expect(c.muestras[0].inicio!.toISOString()).toBe('2026-10-20T15:05:00.000Z')
-    expect(c.muestras[1].inicio!.toISOString()).toBe('2026-10-17T14:38:00.000Z') // sin mediciones: fecha del plan
+    expect([c.muestras[1].inicio, c.muestras[1].fin]).toEqual([null, null]) // sin mediciones: fecha y hora en blanco
     expect(c.responsables).toEqual(['Usuario Prueba'])
   })
 

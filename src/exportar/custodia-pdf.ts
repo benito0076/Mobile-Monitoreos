@@ -30,11 +30,11 @@ const hora = (d: Date) => `${dos(d.getHours())}:${dos(d.getMinutes())}`
 export function armarCustodia(d: DatosPlan, ficha: FichaCustodia = {}): DatosCustodia {
   const muestras = d.muestras.slice().sort((a, b) => a.codigo.localeCompare(b.codigo)).map((m): MuestraCustodia => {
     const horas = d.mediciones.filter((x) => x.muestra_id === m.id).map((x) => Date.parse(x.hora_telefono)).sort((a, b) => a - b)
-    const plan = m.fecha_planeada ? new Date(m.fecha_planeada) : null
     return {
       codigo: m.codigo, punto: m.punto_texto, tipo: m.tipo, matriz: matrizDe(m.matriz, m.submatriz),
       parametros: d.parametros.filter((p) => p.muestra_id === m.id && !p.es_insitu).map((p) => p.parametro),
-      inicio: horas.length ? new Date(horas[0]) : plan, fin: horas.length ? new Date(horas[horas.length - 1]) : plan,
+      // Sin mediciones reportadas, fecha y hora quedan en blanco (la fecha planeada no se usa)
+      inicio: horas.length ? new Date(horas[0]) : null, fin: horas.length ? new Date(horas[horas.length - 1]) : null,
     }
   })
   const quienes = [...new Set(d.mediciones.map((x) => x.usuario_id).filter((u): u is string => !!u))].map((u) => d.usuarios[u] ?? u)
