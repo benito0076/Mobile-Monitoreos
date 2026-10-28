@@ -6,10 +6,11 @@ import { tomarPlan } from '../src/datos/planes'
 const PLAN = { id: 'p1', nombre: 'Plan 1' }
 
 // Cliente falso: devuelve las filas de la tabla pedida (cortadas por range, como PostgREST).
-function falso(tomado: boolean, muchas = 0) {
+function falso(tomado: boolean, muchas = 0, planId = 'p1') {
+  const mid = planId === 'p1' ? 'm1' : `m-${planId}`
   const filas: Record<string, any[]> = {
-    muestras: [{ id: 'm1', plan_id: 'p1', codigo: '10500-26', punto_texto: 'P', punto_codigo: null, tipo: 'Puntual', matriz: 'AGUA', submatriz: null, fecha_planeada: null, estado: 'pendiente' }],
-    muestra_parametros: Array.from({ length: muchas || 2 }, (_, i) => ({ id: `r${i}`, muestra_id: 'm1', parametro: `par ${i} `, es_insitu: i === 0, muestras: { plan_id: 'p1' } })),
+    muestras: [{ id: mid, plan_id: planId, codigo: `10500-26-${planId}`, punto_texto: 'P', punto_codigo: null, tipo: 'Puntual', matriz: 'AGUA', submatriz: null, fecha_planeada: null, estado: 'pendiente' }],
+    muestra_parametros: Array.from({ length: muchas || 2 }, (_, i) => ({ id: `r${planId}${i}`, muestra_id: mid, parametro: `par ${i} `, es_insitu: i === 0, muestras: { plan_id: planId } })),
     parametros_insitu: [{ nombre: 'pH', unidad: '', minimo: 0, maximo: 14, obligatorio: true }],
     configuracion: [{ clave: 'umbral_gps_m', valor: '30' }],
   }
@@ -46,6 +47,17 @@ describe('elegir plan', () => {
   test('pagina cuando hay más de 1000 parámetros', async () => {
     await tomarPlan(falso(true, 2300), PLAN, 'u1')
     expect(await local.muestraParametros.count()).toBe(2300)
+  })
+
+  test('una comisión puede tener varios planes en el teléfono; descargar uno no borra los otros', async () => {
+    await tomarPlan(falso(true, 0, 'p1'), PLAN, 'u1')
+    await tomarPlan(falso(true, 3, 'p2'), { id: 'p2', nombre: 'Plan 2' }, 'u1')
+    expect((await local.planes.toArray()).map((p) => p.id).sort()).toEqual(['p1', 'p2'])
+    expect(await local.muestras.where('plan_id').equals('p1').count()).toBe(1)
+    expect(await local.muestras.where('plan_id').equals('p2').count()).toBe(1)
+    expect(await local.muestraParametros.count()).toBe(2 + 3)
+    await tomarPlan(falso(true, 0, 'p1'), PLAN, 'u1') // actualizar el primero no toca el segundo
+    expect(await local.muestraParametros.where('muestra_id').equals('m-p2').count()).toBe(3)
   })
 
   test('descargar de nuevo no duplica', async () => {

@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../datos/supabase'
 import { planesVisibles, tomarPlan, type PlanDisponible } from '../../datos/planes'
 
-export function ElegirPlan({ usuarioId, alTomar }: { usuarioId: string; alTomar: () => void }) {
+export function ElegirPlan({ usuarioId, descargados, alTomar, alVolver }: {
+  usuarioId: string; descargados: string[]; alTomar: (planId: string) => void; alVolver?: () => void
+}) {
   const [planes, setPlanes] = useState<PlanDisponible[]>([])
   const [mensaje, setMensaje] = useState('')
   const [ocupado, setOcupado] = useState(false)
@@ -17,23 +19,27 @@ export function ElegirPlan({ usuarioId, alTomar }: { usuarioId: string; alTomar:
       if ((await tomarPlan(supabase, p, usuarioId)) === 'tomado') {
         setMensaje(`El plan «${p.nombre}» ya fue tomado por otra comisión. Elige otro.`)
         await cargar()
-      } else alTomar()
+      } else alTomar(p.id)
     } catch (e) {
       setMensaje(`No se pudo elegir el plan: ${(e as Error).message}`)
     } finally { setOcupado(false) }
   }
 
-  if (!enLinea) return <p role="alert" className="error">Elegir plan requiere conexión. Conéctate y vuelve a intentar.</p>
+  const volver = alVolver && <button className="secundario" onClick={alVolver}>← Volver a mis planes</button>
+  if (!enLinea) return <section>{volver}<p role="alert" className="error">Descargar planes requiere conexión. Conéctate y vuelve a intentar.</p></section>
   return (
     <section>
-      <h2>Elige tu plan</h2>
+      {volver}
+      <h2>{alVolver ? 'Planes disponibles' : 'Elige tu plan'}</h2>
       {mensaje && <p role="status">{mensaje}</p>}
       {planes.length === 0 && <p>No hay planes disponibles.</p>}
       <ul className="planes">
         {planes.map((p) => (
           <li key={p.id}>
-            <span>{p.nombre}</span>
-            <button onClick={() => elegir(p)} disabled={ocupado}>{p.comision_id === usuarioId ? 'Descargar de nuevo' : 'Tomar este plan'}</button>
+            <span>{p.nombre}{descargados.includes(p.id) && <> <span className="estado en_campo">en este teléfono</span></>}</span>
+            <button onClick={() => elegir(p)} disabled={ocupado}>
+              {p.comision_id !== usuarioId ? 'Tomar este plan' : descargados.includes(p.id) ? 'Actualizar' : 'Descargar'}
+            </button>
           </li>
         ))}
       </ul>

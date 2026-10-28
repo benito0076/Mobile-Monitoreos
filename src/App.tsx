@@ -9,18 +9,28 @@ import { ListaMuestras } from './ui/campo/ListaMuestras'
 import { FormMuestra } from './ui/campo/FormMuestra'
 import { medirDesfase } from './datos/reloj'
 import { Sincronizar } from './ui/campo/Sincronizar'
-import { local, type PlanLocal } from './datos/db-local'
+import { local, metaGet, metaSet } from './datos/db-local'
+import { SelectorPlan, type PlanConConteo } from './ui/campo/SelectorPlan'
 
 export function App() {
   const [sesion, setSesion] = useState<Session | null | undefined>(undefined)
   const [rol, setRol] = useState<string | null>(null)
-  const [planLocal, setPlanLocal] = useState<PlanLocal | undefined>()
+  const [planes, setPlanes] = useState<PlanConConteo[]>([])
+  const [activoId, setActivoId] = useState<string | undefined>()
+  const [eligiendo, setEligiendo] = useState(false)
+  const [listo, setListo] = useState(false) // ya se leyó lo que hay en el teléfono
   const [abierta, setAbierta] = useState<string | null>(null)
 
+  // Una comisión puede tener varios planes en el teléfono; se trabaja con uno a la vez (el último usado).
   const leerLocal = async () => {
-    const p = await local.planes.toCollection().first()
-    setPlanLocal(p)
+    const ps = await local.planes.toArray()
+    setPlanes(await Promise.all(ps.map(async (p) => ({ ...p, n: await local.muestras.where('plan_id').equals(p.id).count() }))))
+    const guardado = await metaGet<string>('plan_activo')
+    setActivoId(ps.find((p) => p.id === guardado)?.id ?? ps[0]?.id)
+    setListo(true)
   }
+  const usar = async (id: string) => { await metaSet('plan_activo', id); setAbierta(null); await leerLocal() }
+  const planLocal = planes.find((p) => p.id === activoId)
 
   useEffect(() => {
     cerrarSiVencida().then(() => supabase.auth.getSession()).then(({ data }) => setSesion(data.session))
@@ -50,12 +60,19 @@ export function App() {
         </div>
       </header>
       <main>
-      {rol === 'comision' && planLocal && <Sincronizar />}
+      {rol === 'comision' && planes.length > 0 && <Sincronizar />}
       {rol === 'oficina' && <PanelOficina yo={sesion.user.id} />}
-      {rol === 'comision' && !planLocal && <ElegirPlan usuarioId={sesion.user.id} alTomar={leerLocal} />}
-      {rol === 'comision' && planLocal && (abierta
+      {rol === 'comision' && listo && (planes.length === 0 || eligiendo) && (
+        <ElegirPlan usuarioId={sesion.user.id} descargados={planes.map((p) => p.id)}
+          alTomar={async (id) => { await usar(id); setEligiendo(false) }}
+          alVolver={planes.length > 0 ? () => setEligiendo(false) : undefined} />
+      )}
+      {rol === 'comision' && planLocal && !eligiendo && (abierta
         ? <FormMuestra id={abierta} usuario={sesion.user.id} volver={() => setAbierta(null)} />
-        : <ListaMuestras plan={planLocal} abrir={setAbierta} />)}
+        : <>
+            <SelectorPlan planes={planes} activo={activoId} cambiar={usar} masPlanes={() => setEligiendo(true)} />
+            <ListaMuestras plan={planLocal} abrir={setAbierta} />
+          </>)}
       {rol === null && <p>Tu usuario no tiene perfil asignado. Pide a la oficina que lo cree.</p>}
       </main>
     </>

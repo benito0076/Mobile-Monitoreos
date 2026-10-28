@@ -93,3 +93,5 @@ code { background: #eceefb; padding: .1rem .4rem; border-radius: 4px; font-size:
   .sync { grid-template-columns: auto auto 1fr; align-items: center; }
   .sync [role=status] { margin: 0; }
 }
+.selector-plan { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; margin: 1rem 0 .25rem; }
+.selector-plan label { flex: 1 1 14rem; }

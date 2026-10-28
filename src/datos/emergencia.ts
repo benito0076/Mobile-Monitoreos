@@ -9,16 +9,16 @@ async function base64(b: Blob) {
 
 /** Toda la jornada guardada en el teléfono (confirmada o no) en un solo archivo JSON, fotos incluidas. */
 export async function exportarJornada(): Promise<{ nombre: string; blob: Blob }> {
-  const plan = await local.planes.toCollection().first()
+  const planes = await local.planes.toArray()
   const fotos = await Promise.all((await local.fotos.toArray()).map(async ({ blob, ...f }) => ({ ...f, jpeg_base64: await base64(blob) })))
   const datos = {
-    exportado_en: new Date().toISOString(), version_app: __VERSION_APP__, plan,
+    exportado_en: new Date().toISOString(), version_app: __VERSION_APP__, planes,
     muestras: await local.muestras.toArray(),
     mediciones: await local.mediciones.toArray(),
     descripciones: await local.descripciones.toArray(),
     fotos,
   }
-  const nombre = `jornada_${(plan?.nombre ?? 'sin-plan').replace(/[^\w-]+/g, '_')}_${datos.exportado_en.slice(0, 10)}.json`
+  const nombre = `jornada_${(planes.length === 1 ? planes[0].nombre : planes.length > 1 ? 'varios-planes' : 'sin-plan').replace(/[^\w-]+/g, '_')}_${datos.exportado_en.slice(0, 10)}.json`
   return { nombre, blob: new Blob([JSON.stringify(datos)], { type: 'application/json' }) }
 }
 
