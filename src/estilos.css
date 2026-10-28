@@ -38,6 +38,7 @@ a { color: var(--azul); }
 section > .tarjeta { box-shadow: none; border: 1px solid var(--borde); background-size: 100% 4px; padding-top: 1.5rem; margin-bottom: 1rem; }
 
 /* Formularios y botones (objetivos táctiles de 44 px) */
+section > label { margin-top: .9rem; }
 label { display: grid; gap: .3rem; font-weight: 600; font-size: .9rem; color: var(--azul-texto); }
 input, select, textarea { font: inherit; font-weight: 400; color: var(--tinta); padding: .65rem .75rem; min-height: 2.75rem; border: 2px solid var(--borde); border-radius: 8px; background: #fff; width: 100%; }
 input[type=file] { border-style: dashed; background: #fff; padding: .55rem; }
