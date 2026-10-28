@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { local, type DescripcionLocal, type FotoLocal, type MedicionLocal, type MuestraLocal, type ParametroInsitu } from '../../datos/db-local'
 import { cambiarEstado, claveMedicion, corregirMedicion, esCompuesta, descripcionVigente, guardarDescripcion, guardarFoto, guardarMedicion, vigentes } from '../../datos/mediciones'
-import { advertencias, parsearValor } from '../../datos/validar-medicion'
+import { advertenciaGps, advertenciaRango, parsearValor } from '../../datos/validar-medicion'
 import { leerGps } from '../../datos/gps'
 import { comprimir } from '../../datos/fotos'
 import { UMBRAL_GPS_M } from '../../config'
@@ -37,11 +37,13 @@ function FilaMedicion({ muestra, nombre, alicuota, info, actual, usuario, umbral
     enCurso.current = true; setError(''); setLeyendo(true)
     try {
       const gps = await leerGps()
-      const adv = advertencias(n, info, gps, umbral)
-      if (adv.length) setAviso({ n, gps, adv }); else await guardar(n, gps)
+      // Solo el rango pide confirmar (puede ser un error de digitación). El GPS se guarda solo y queda señalado en la fila.
+      const rango = advertenciaRango(n, info)
+      if (rango) setAviso({ n, gps, adv: [rango] }); else await guardar(n, gps)
     } finally { enCurso.current = false; setLeyendo(false) }
   }
 
+  const gpsDudoso = actual && advertenciaGps(actual.lat == null ? null : { lat: actual.lat, lon: actual.lon!, precision_m: actual.precision_m ?? 0 }, umbral)
   const editando = !actual || corrigiendo
   return (
     <li className="medicion">
@@ -50,6 +52,7 @@ function FilaMedicion({ muestra, nombre, alicuota, info, actual, usuario, umbral
         <p>
           {actual.valor} {actual.unidad} · v{actual.version} · {new Date(actual.hora_telefono).toLocaleTimeString()}
           {actual.precision_m != null && ` · GPS ±${Math.round(actual.precision_m)} m`}
+          {gpsDudoso && <small className="error"> · ⚠ {gpsDudoso}</small>}
           {' '}<button onClick={() => setCorrigiendo(true)}>Corregir</button>
         </p>
       )}
@@ -71,7 +74,6 @@ function FilaMedicion({ muestra, nombre, alicuota, info, actual, usuario, umbral
         <div role="alert" className="aviso">
           <ul>{aviso.adv.map((a) => <li key={a}>{a}</li>)}</ul>
           <button onClick={() => guardar(aviso.n, aviso.gps)}>Guardar así</button>{' '}
-          <button onClick={intentar}>Repetir lectura GPS</button>{' '}
           <button onClick={() => setAviso(null)}>Cancelar</button>
         </div>
       )}
