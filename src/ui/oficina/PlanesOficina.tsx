@@ -5,12 +5,23 @@ import { planesVisibles, type PlanDisponible } from '../../datos/planes'
 import { listarPerfiles, type Perfil } from '../../datos/usuarios'
 import { cargarDatosPlan } from '../../datos/exportar-datos'
 import { construirExportacion, exportarPlan } from '../../exportar/exportador'
+import type { FichaCustodia } from '../../exportar/custodia-pdf'
+
+const CAMPOS_FICHA: [keyof FichaCustodia, string][] = [
+  ['cliente', 'Nombre del cliente'], ['codigo_muestreo', 'Código del muestreo'], ['cotizacion', 'Número de cotización'], ['municipio', 'Municipio/Ciudad'], ['departamento', 'Departamento'],
+]
+const descargar = (blob: Blob, nombre: string) => {
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: nombre })
+  a.click(); URL.revokeObjectURL(a.href)
+}
 
 export function PlanesOficina() {
   const [planes, setPlanes] = useState<PlanDisponible[]>([])
   const [comisiones, setComisiones] = useState<Perfil[]>([])
   const [destino, setDestino] = useState<Record<string, string>>({})
   const [estado, setEstado] = useState('')
+  const [editando, setEditando] = useState<string | null>(null) // plan cuyos datos de custodia se editan
+  const [ficha, setFicha] = useState<FichaCustodia>({})
 
   const cargar = () =>
     Promise.all([planesVisibles(supabase), listarPerfiles(supabase)])
@@ -37,6 +48,25 @@ export function PlanesOficina() {
     rpc('reasignar_plan', { p_plan: p.id, p_comision: c.id }, `«${p.nombre}» reasignado a ${c.nombre}.`)
   }
 
+  function editarFicha(p: PlanDisponible) { setFicha(p.ficha ?? {}); setEditando(editando === p.id ? null : p.id) }
+
+  async function guardarFicha(p: PlanDisponible) {
+    const { error } = await supabase.from('planes').update({ ficha }).eq('id', p.id)
+    setEstado(error ? `No se guardó: ${error.message}` : `Datos de custodia de «${p.nombre}» guardados.`)
+    if (!error) { setEditando(null); cargar() }
+  }
+
+  async function custodia(p: PlanDisponible) {
+    setEstado('Preparando cadena de custodia…')
+    try {
+      const [datos, plantilla] = await Promise.all([cargarDatosPlan(supabase, p), fetch('/fm-017.pdf').then((r) => { if (!r.ok) throw new Error('No se pudo leer la plantilla FM-017'); return r.arrayBuffer() })])
+      const { armarCustodia, llenarCustodia } = await import('../../exportar/custodia-pdf') // pdf-lib solo se baja al generar el PDF
+      const bytes = await llenarCustodia(plantilla, armarCustodia(datos, p.ficha))
+      descargar(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${p.nombre.replace(/[^\w-]+/g, '_')}_FM-017.pdf`)
+      setEstado(`Cadena de custodia de «${p.nombre}» generada (${datos.muestras.length} muestras).`)
+    } catch (e) { setEstado(`No se pudo generar: ${(e as Error).message}`) }
+  }
+
   async function exportar(p: PlanDisponible) {
     setEstado('Preparando archivo…')
     try {
@@ -56,12 +86,14 @@ export function PlanesOficina() {
       <div className="tabla"><table>
         <thead><tr><th>Plan</th><th>Comisión</th><th>Acciones</th></tr></thead>
         <tbody>
-          {planes.map((p) => (
+          {planes.flatMap((p) => [
             <tr key={p.id}>
               <td>{p.nombre}</td>
               <td>{nombreDe(p.comision_id)}</td>
               <td><div className="acciones">
                 <button onClick={() => exportar(p)}>Exportar</button>
+                <button className="secundario" onClick={() => custodia(p)}>Cadena de custodia</button>
+                <button className="secundario" onClick={() => editarFicha(p)}>Datos de custodia</button>
                 {p.comision_id && <button className="secundario" onClick={() => liberar(p)}>Liberar</button>}
                 <select value={destino[p.id] ?? ''} onChange={(e) => setDestino({ ...destino, [p.id]: e.target.value })} aria-label={`Comisión para ${p.nombre}`}>
                   <option value="">Reasignar a…</option>
@@ -69,8 +101,19 @@ export function PlanesOficina() {
                 </select>
                 <button className="secundario" disabled={!destino[p.id]} onClick={() => reasignar(p)}>Reasignar</button>
               </div></td>
-            </tr>
-          ))}
+            </tr>,
+            editando === p.id && (
+              <tr key={`${p.id}-ficha`}><td colSpan={3}>
+                <div className="acciones">
+                  {CAMPOS_FICHA.map(([k, etiqueta]) => (
+                    <label key={k}>{etiqueta} <input value={ficha[k] ?? ''} onChange={(e) => setFicha({ ...ficha, [k]: e.target.value })} /></label>
+                  ))}
+                  <button onClick={() => guardarFicha(p)}>Guardar</button> <button className="secundario" onClick={() => setEditando(null)}>Cancelar</button>
+                </div>
+                <small>El nombre del proyecto es el nombre del plan. Si dejas vacío el código del muestreo se toma del nombre del plan (p. ej. 1128-26).</small>
+              </td></tr>
+            ),
+          ])}
         </tbody>
       </table></div>
     </section>

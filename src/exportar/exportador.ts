@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx'
 
 export interface DatosPlan {
   plan: { nombre: string }
-  muestras: { id: string; codigo: string; punto_texto: string; tipo: string | null; matriz: string | null; submatriz: string | null; estado: string }[]
+  muestras: { id: string; codigo: string; punto_texto: string; fecha_planeada?: string | null; tipo: string | null; matriz: string | null; submatriz: string | null; estado: string }[]
   parametros: { muestra_id: string; parametro: string; es_insitu: boolean }[]
   mediciones: { id: string; muestra_id: string; parametro: string; alicuota?: number | null; valor: string; unidad: string; hora_telefono: string; lat: number | null; lon: number | null; precision_m: number | null; usuario_id: string | null; equipo_id: string | null; version: number; reemplaza_a: string | null; motivo_correccion: string | null; marcada: boolean; motivo_marca: string | null }[]
   descripciones: { muestra_id: string; texto: string; version: number }[]

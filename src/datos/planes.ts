@@ -1,7 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { local, type MuestraParametroLocal } from './db-local'
+import type { FichaCustodia } from '../exportar/custodia-pdf'
 
-export interface PlanDisponible { id: string; nombre: string; comision_id: string | null; creado_en: string }
+export interface PlanDisponible { id: string; nombre: string; comision_id: string | null; creado_en: string; ficha?: FichaCustodia }
 type Db = Pick<SupabaseClient, 'from' | 'rpc'>
 
 const PAGINA = 1000 // tope por defecto de PostgREST
@@ -18,7 +19,7 @@ export async function todo<T>(consulta: (desde: number, hasta: number) => Promis
 
 /** Planes libres y el que ya tiene esta comisión (RLS filtra el resto). */
 export function planesVisibles(db: Db) {
-  return todo<PlanDisponible>((a, b) => db.from('planes').select('id,nombre,comision_id,creado_en').order('creado_en').range(a, b))
+  return todo<PlanDisponible>((a, b) => db.from('planes').select('id,nombre,comision_id,creado_en,ficha').order('creado_en').range(a, b))
 }
 
 /** Descarga el plan completo al teléfono, reemplazando lo anterior de ese plan en una sola transacción. */
