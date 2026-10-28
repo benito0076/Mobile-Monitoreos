@@ -38,6 +38,11 @@ describe('lectura del .xls de ejemplo', () => {
 })
 
 describe('validaciones', () => {
+  test('un punto sin identificador LAM no genera aviso: el identificador es solo parte del nombre', () => {
+    const m = { punto_texto: 'Río Cauca Puente', punto_codigo: null, tipo: '', matriz: '', submatriz: '', fecha_planeada: null, codigo: '11103-26', parametros: ['pH'] }
+    expect(validarPlan([m])).toEqual([])
+  })
+
   const base = { punto_texto: 'p', punto_codigo: 'LAM2249-0001', tipo: '', matriz: '', submatriz: '', fecha_planeada: null }
   test('duplicados, sin parámetros y caracteres raros', () => {
     const r = validarPlan([
