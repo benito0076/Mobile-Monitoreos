@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../datos/supabase'
+import { Mensaje } from '../Mensaje'
 import { planesVisibles, type PlanDisponible } from '../../datos/planes'
 import { listarPerfiles, type Perfil } from '../../datos/usuarios'
 import { cargarDatosPlan } from '../../datos/exportar-datos'
@@ -51,7 +52,7 @@ export function PlanesOficina() {
   return (
     <section>
       <h2>Planes</h2>
-      {estado && <p role="status">{estado}</p>}
+      <Mensaje texto={estado} cerrar={() => setEstado('')} />
       <div className="tabla"><table>
         <thead><tr><th>Plan</th><th>Comisión</th><th>Acciones</th></tr></thead>
         <tbody>

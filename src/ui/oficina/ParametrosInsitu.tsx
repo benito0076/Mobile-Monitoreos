@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../datos/supabase'
+import { Mensaje } from '../Mensaje'
 import type { ParametroInsitu } from '../../datos/db-local'
 import { aFilaInsitu, guardarInsitu, listarInsitu, nombresParametros, quitarInsitu, reaplicarInsitu, type BorradorInsitu } from '../../datos/insitu'
 
@@ -23,6 +24,7 @@ export function ParametrosInsitu() {
   const [nuevo, setNuevo] = useState<BorradorInsitu>(VACIO)
   const [edicion, setEdicion] = useState<Record<string, BorradorInsitu>>({})
   const [estado, setEstado] = useState('')
+  const [aplicando, setAplicando] = useState(false)
 
   async function cargar() {
     try {
@@ -42,17 +44,20 @@ export function ParametrosInsitu() {
     try { await quitarInsitu(supabase, p.nombre); setEstado('Parámetro quitado.'); await cargar() } catch (e) { setEstado((e as Error).message) }
   }
   async function aplicar() {
+    setAplicando(true); setEstado('Aplicando la lista a los planes cargados…')
     try {
       const n = await reaplicarInsitu(supabase)
-      setEstado(n ? `${n} parámetros de planes ya cargados quedaron actualizados. En cada celular, pulsa «Actualizar» en el plan para bajar el cambio.` : 'Los planes cargados ya coinciden con la lista.')
+      setEstado(n ? `Listo: ${n} parámetros de planes ya cargados quedaron actualizados. En cada celular, pulsa «Actualizar» en el plan para bajar el cambio.`
+                  : 'No había nada que actualizar: todos los planes cargados ya coinciden con la lista.')
     } catch (e) { setEstado((e as Error).message) }
+    finally { setAplicando(false) }
   }
 
   return (
     <section>
       <h2>Parámetros in situ</h2>
       <p>Lo que se mide en campo. El nombre se elige de los parámetros de los planes cargados, así queda exactamente igual al plan. Los rangos solo advierten, no bloquean.</p>
-      {estado && <p role="status">{estado}</p>}
+      <Mensaje texto={estado} cerrar={() => setEstado('')} />
 
       <div className="tarjeta ancha">
         <b>Agregar parámetro</b>
@@ -87,7 +92,7 @@ export function ParametrosInsitu() {
         </tbody>
       </table></div>
 
-      <button onClick={aplicar}>Aplicar a planes cargados</button>
+      <button onClick={aplicar} disabled={aplicando}>{aplicando ? 'Aplicando…' : 'Aplicar a planes cargados'}</button>
       <p><small>La marca «in situ» se calcula al cargar un plan. Si cambias la lista, aplícala a los planes ya cargados.</small></p>
     </section>
   )

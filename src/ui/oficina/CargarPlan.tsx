@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../datos/supabase'
+import { Mensaje } from '../Mensaje'
 import { leerPlan, type MuestraPlan } from '../../plan/leer-excel'
 import { validarPlan } from '../../plan/validar-plan'
 import { guardarPlan } from '../../plan/guardar-plan'
@@ -59,7 +60,7 @@ export function CargarPlan() {
     <section>
       <h2>Cargar plan de monitoreos</h2>
       <input type="file" accept=".xls,.xlsx" onChange={elegir} />
-      {estado && <p role="status">{estado}</p>}
+      <Mensaje texto={estado} cerrar={() => setEstado('')} />
 
       {muestras.length > 0 && (
         <>
