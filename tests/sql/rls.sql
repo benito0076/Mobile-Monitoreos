@@ -9,6 +9,18 @@ create function pg_temp.ok(c boolean, msg text) returns void language plpgsql as
 set role authenticated; select set_config('request.jwt.claim.sub', :O, false);
 select cargar_plan('Plan 1', 'x.xls', '[{"codigo":"1-26","punto_texto":"P","parametros":["pH","Agua - Temperatura ","Otro"]}]') as plan \gset
 select pg_temp.ok((select count(*) from muestra_parametros where es_insitu) = 2, 'es_insitu usa nombre exacto (con espacio final)');
+
+-- Lista in situ editable: al añadir un nombre, reaplicar_insitu() re-marca los planes ya cargados (solo la oficina)
+select pg_temp.ok((select count(*) from nombres_parametros()) = 3, 'nombres_parametros lista los 3 nombres exactos');
+insert into parametros_insitu (nombre, unidad) values ('Otro', 'x');
+select pg_temp.ok(reaplicar_insitu() = 1, 'reaplicar_insitu re-marca 1 parámetro');
+select pg_temp.ok((select es_insitu from muestra_parametros where parametro = 'Otro'), 'Otro quedó in situ');
+select pg_temp.ok(reaplicar_insitu() = 0, 'reaplicar de nuevo no cambia nada');
+delete from parametros_insitu where nombre = 'Otro';
+select pg_temp.ok(reaplicar_insitu() = 1, 'al quitarlo de la lista se desmarca');
+select set_config('request.jwt.claim.sub', :A, false);
+do $$ begin perform reaplicar_insitu(); raise exception 'debió fallar'; exception when others then if sqlerrm like 'debió%' then raise; end if; end $$;
+select set_config('request.jwt.claim.sub', :O, false);
 select id as muestra from muestras where plan_id = :'plan' \gset
 
 -- la comisión no puede cargar planes

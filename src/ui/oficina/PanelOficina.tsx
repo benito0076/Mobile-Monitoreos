@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { CargarPlan } from './CargarPlan'
 import { PlanesOficina } from './PlanesOficina'
 import { Usuarios } from './Usuarios'
+import { ParametrosInsitu } from './ParametrosInsitu'
 
-const PESTANAS = ['Planes', 'Cargar plan', 'Usuarios'] as const
+const PESTANAS = ['Planes', 'Cargar plan', 'Parámetros in situ', 'Usuarios'] as const
 
 export function PanelOficina({ yo }: { yo: string }) {
   const [vista, setVista] = useState<(typeof PESTANAS)[number]>('Planes')
@@ -14,6 +15,7 @@ export function PanelOficina({ yo }: { yo: string }) {
       </nav>
       {vista === 'Planes' && <PlanesOficina />}
       {vista === 'Cargar plan' && <CargarPlan />}
+      {vista === 'Parámetros in situ' && <ParametrosInsitu />}
       {vista === 'Usuarios' && <Usuarios yo={yo} />}
     </>
   )
