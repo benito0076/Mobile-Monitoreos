@@ -6,6 +6,7 @@ import { listarPerfiles, type Perfil } from '../../datos/usuarios'
 import { cargarDatosPlan } from '../../datos/exportar-datos'
 import { construirExportacion, exportarPlan } from '../../exportar/exportador'
 import type { FichaCustodia } from '../../exportar/custodia-pdf'
+import { nombreUsuario } from '../../../supabase/functions/gestionar-usuarios/logica'
 
 const CAMPOS_FICHA: [keyof FichaCustodia, string][] = [
   ['cliente', 'Nombre del cliente'], ['codigo_muestreo', 'Código del muestreo'], ['cotizacion', 'Número de cotización'], ['municipio', 'Municipio/Ciudad'], ['departamento', 'Departamento'],
@@ -18,7 +19,8 @@ const descargar = (blob: Blob, nombre: string) => {
 
 export function PlanesOficina() {
   const [planes, setPlanes] = useState<PlanDisponible[]>([])
-  const [comisiones, setComisiones] = useState<Perfil[]>([])
+  const [comisiones, setComisiones] = useState<Perfil[]>([]) // activas: se pueden asignar
+  const [perfiles, setPerfiles] = useState<Perfil[]>([]) // todas, para mostrar quién tiene cada plan aunque ya esté desactivado
   const [destino, setDestino] = useState<Record<string, string>>({})
   const [destino2, setDestino2] = useState<Record<string, string>>({}) // segundo integrante (opcional)
   const [estado, setEstado] = useState('')
@@ -27,12 +29,12 @@ export function PlanesOficina() {
 
   const cargar = () =>
     Promise.all([planesVisibles(supabase), listarPerfiles(supabase)])
-      .then(([p, u]) => { setPlanes(p); setComisiones(u.filter((x) => x.rol === 'comision' && x.activo)) })
+      .then(([p, u]) => { setPlanes(p); setPerfiles(u); setComisiones(u.filter((x) => x.rol === 'comision' && x.activo)) })
       .catch((e) => setEstado(e.message))
   useEffect(() => { cargar() }, [])
 
-  const nombreDe = (id: string | null | undefined) => (id ? comisiones.find((c) => c.id === id)?.nombre ?? 'Comisión inactiva' : 'Disponible')
-  const equipoDe = (p: PlanDisponible) => (p.comision_id_2 ? `${nombreDe(p.comision_id)} y ${nombreDe(p.comision_id_2)}` : nombreDe(p.comision_id))
+  const integrantes = (p: PlanDisponible) => [p.comision_id, p.comision_id_2].flatMap((id) => (id ? [perfiles.find((x) => x.id === id)] : []))
+  const fechaDe = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('es-CO') : '')
 
   async function rpc(fn: 'liberar_plan' | 'reasignar_plan', args: Record<string, string | null>, ok: string) {
     const { error } = await supabase.rpc(fn, args)
@@ -76,7 +78,7 @@ export function PlanesOficina() {
     try {
       const [datos, plantilla] = await Promise.all([cargarDatosPlan(supabase, p), fetch('/fm-081.xlsx').then((r) => { if (!r.ok) throw new Error('No se pudo leer la plantilla FM-081'); return r.arrayBuffer() })])
       const { armarPdt, llenarPdt } = await import('../../exportar/pdt')
-      const tecnicos = [p.comision_id, p.comision_id_2].flatMap((id) => comisiones.find((c) => c.id === id)?.nombre ?? [])
+      const tecnicos = integrantes(p).flatMap((x) => x?.nombre ?? [])
       const bytes = llenarPdt(new Uint8Array(plantilla), armarPdt(datos, p.ficha, tecnicos))
       descargar(new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${p.nombre.replace(/[^\w-]+/g, '_')}_PDT.xlsx`)
       setEstado(`PDT de «${p.nombre}» generado. Completa en el Excel las coordenadas, la altitud y el mapa.`)
@@ -100,12 +102,17 @@ export function PlanesOficina() {
       <h2>Planes</h2>
       <Mensaje texto={estado} cerrar={() => setEstado('')} />
       <div className="tabla"><table>
-        <thead><tr><th>Plan</th><th>Comisión</th><th>Acciones</th></tr></thead>
+        <thead><tr><th>Plan</th><th>Asignado a</th><th>Acciones</th></tr></thead>
         <tbody>
           {planes.flatMap((p) => [
             <tr key={p.id}>
               <td>{p.nombre}</td>
-              <td>{equipoDe(p)}</td>
+              <td>
+                {integrantes(p).length === 0 ? <i>Disponible (sin asignar)</i> : integrantes(p).map((x, i) => (
+                  <div key={i}>{x ? <>{x.nombre} <small>({nombreUsuario(x.correo) ?? 'sin usuario'}){x.activo ? '' : ' · desactivado'}</small></> : <i>Usuario eliminado</i>}</div>
+                ))}
+                {p.tomado_en && integrantes(p).length > 0 && <small>Desde el {fechaDe(p.tomado_en)}</small>}
+              </td>
               <td><div className="acciones">
                 <button onClick={() => exportar(p)}>Exportar</button>
                 <button className="secundario" onClick={() => custodia(p)}>Cadena de custodia</button>
