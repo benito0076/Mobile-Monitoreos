@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "co.ambienciq.monitoreos",
+      "sha256_cert_fingerprints": [
+        "84:C7:CB:43:D0:A8:44:B2:76:6A:44:03:CF:FD:AA:79:54:78:41:B2:60:C5:77:36:20:3B:93:F3:7D:AC:87:0F"
+      ]
+    }
+  }
+]
