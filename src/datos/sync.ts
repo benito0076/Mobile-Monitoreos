@@ -115,5 +115,5 @@ async function ejecutar(db: Db, o: Required<Opciones>): Promise<Resultado> {
 export async function purgarConfirmados(dias = RETENCION_DIAS, ahora = Date.now()) {
   const limite = new Date(ahora - dias * 86400000).toISOString()
   for (const t of [local.mediciones, local.descripciones, local.fotos] as any[])
-    await t.where('sincronizado').equals(1).filter((r: { hora_telefono: string }) => r.hora_telefono < limite).delete()
+    await t.where('sincronizado').equals(1).filter((r: { hora_telefono: string; bajado_en?: string }) => (r.bajado_en ?? r.hora_telefono) < limite).delete()
 }

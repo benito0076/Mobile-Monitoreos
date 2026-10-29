@@ -19,10 +19,11 @@ export interface MedicionLocal {
   version: number; reemplaza_a: string | null; motivo_correccion: string | null
   sincronizado: number // 0 pendiente, 1 confirmado por el servidor
   error_sync?: string // último rechazo del servidor para este registro
+  bajado_en?: string // registrado por el compañero y descargado aquí; la purga cuenta desde esta fecha
 }
 export interface DescripcionLocal {
   id: string; muestra_id: string; texto: string; hora_telefono: string; usuario_id: string
-  version: number; reemplaza_a: string | null; motivo_correccion: string | null; sincronizado: number; error_sync?: string
+  version: number; reemplaza_a: string | null; motivo_correccion: string | null; sincronizado: number; error_sync?: string; bajado_en?: string
 }
 export interface FotoLocal {
   id: string; muestra_id: string; ruta_storage: string; blob: Blob

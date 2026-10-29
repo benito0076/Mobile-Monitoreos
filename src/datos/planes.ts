@@ -30,8 +30,13 @@ export async function descargarPlan(db: Db, plan: { id: string; nombre: string }
   const parametros: MuestraParametroLocal[] = filas.map(({ muestras: _, ...p }) => p)
   const insitu = await todo<any>((a, b) => db.from('parametros_insitu').select('*').range(a, b))
   const config = await todo<any>((a, b) => db.from('configuracion').select('*').range(a, b))
+  // Lo que ya registró el compañero (o este mismo usuario desde otro teléfono): así los dos ven lo mismo y pueden corregirlo.
+  const delPlan = (tabla: string, cols: string) =>
+    todo<any>((a, b) => db.from(tabla).select(`${cols},muestras!inner(plan_id)`).eq('muestras.plan_id', plan.id).order('id').range(a, b))
+  const mediciones = await delPlan('mediciones', 'id,muestra_id,parametro,alicuota,valor,unidad,hora_telefono,desfase_reloj_s,lat,lon,precision_m,usuario_id,equipo_id,version_app,version,reemplaza_a,motivo_correccion')
+  const descripciones = await delPlan('descripciones_punto', 'id,muestra_id,texto,hora_telefono,usuario_id,version,reemplaza_a,motivo_correccion')
 
-  await local.transaction('rw', [local.planes, local.muestras, local.muestraParametros, local.parametrosInsitu, local.config], async () => {
+  await local.transaction('rw', [local.planes, local.muestras, local.muestraParametros, local.parametrosInsitu, local.config, local.mediciones, local.descripciones], async () => {
     const previas = await local.muestras.where('plan_id').equals(plan.id).toArray()
     const pendientes = new Map(previas.filter((m) => m.estado_pendiente).map((m) => [m.id, m]))
     for (const m of muestras) if (pendientes.has(m.id)) Object.assign(m, { estado: pendientes.get(m.id)!.estado, estado_pendiente: 1 })
@@ -43,6 +48,12 @@ export async function descargarPlan(db: Db, plan: { id: string; nombre: string }
     await local.muestraParametros.bulkPut(parametros)
     await local.parametrosInsitu.clear(); await local.parametrosInsitu.bulkPut(insitu)
     await local.config.clear(); await local.config.bulkPut(config.map((c) => ({ clave: c.clave, valor: Number(c.valor) })))
+    // Solo se agrega lo que falta: lo que ya está en este teléfono (incluido lo pendiente de enviar) no se toca.
+    const bajado_en = new Date().toISOString()
+    for (const [tabla, filas] of [[local.mediciones, mediciones], [local.descripciones, descripciones]] as const) {
+      const ya = await (tabla as any).bulkGet(filas.map((f) => f.id))
+      await (tabla as any).bulkAdd(filas.filter((_, i) => !ya[i]).map(({ muestras: _, ...f }) => ({ ...f, sincronizado: 1, bajado_en })))
+    }
   })
   return muestras.length
 }
