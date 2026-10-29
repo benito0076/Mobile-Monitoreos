@@ -9,6 +9,7 @@ import type { FichaCustodia } from '../../exportar/custodia-pdf'
 
 const CAMPOS_FICHA: [keyof FichaCustodia, string][] = [
   ['cliente', 'Nombre del cliente'], ['codigo_muestreo', 'Código del muestreo'], ['cotizacion', 'Número de cotización'], ['municipio', 'Municipio/Ciudad'], ['departamento', 'Departamento'],
+  ['direccion', 'Dirección del cliente'], ['contacto', 'Contacto del cliente'], ['telefono', 'Teléfono del cliente'], ['telefono_campo', 'Teléfonos del técnico de campo'],
 ]
 const descargar = (blob: Blob, nombre: string) => {
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: nombre })
@@ -55,7 +56,7 @@ export function PlanesOficina() {
 
   async function guardarFicha(p: PlanDisponible) {
     const { error } = await supabase.from('planes').update({ ficha }).eq('id', p.id)
-    setEstado(error ? `No se guardó: ${error.message}` : `Datos de custodia de «${p.nombre}» guardados.`)
+    setEstado(error ? `No se guardó: ${error.message}` : `Datos de «${p.nombre}» guardados.`)
     if (!error) { setEditando(null); cargar() }
   }
 
@@ -68,6 +69,18 @@ export function PlanesOficina() {
       descargar(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${p.nombre.replace(/[^\w-]+/g, '_')}_FM-017.pdf`)
       setEstado(`Cadena de custodia de «${p.nombre}» generada (${datos.muestras.length} muestras).`)
     } catch (e) { setEstado(`No se pudo generar: ${(e as Error).message}`) }
+  }
+
+  async function pdt(p: PlanDisponible) {
+    setEstado('Preparando el PDT…')
+    try {
+      const [datos, plantilla] = await Promise.all([cargarDatosPlan(supabase, p), fetch('/fm-081.xlsx').then((r) => { if (!r.ok) throw new Error('No se pudo leer la plantilla FM-081'); return r.arrayBuffer() })])
+      const { armarPdt, llenarPdt } = await import('../../exportar/pdt')
+      const tecnicos = [p.comision_id, p.comision_id_2].flatMap((id) => comisiones.find((c) => c.id === id)?.nombre ?? [])
+      const bytes = llenarPdt(new Uint8Array(plantilla), armarPdt(datos, p.ficha, tecnicos))
+      descargar(new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${p.nombre.replace(/[^\w-]+/g, '_')}_PDT.xlsx`)
+      setEstado(`PDT de «${p.nombre}» generado. Completa en el Excel las coordenadas, la altitud y el mapa.`)
+    } catch (e) { setEstado(`No se pudo generar el PDT: ${(e as Error).message}`) }
   }
 
   async function exportar(p: PlanDisponible) {
@@ -96,7 +109,8 @@ export function PlanesOficina() {
               <td><div className="acciones">
                 <button onClick={() => exportar(p)}>Exportar</button>
                 <button className="secundario" onClick={() => custodia(p)}>Cadena de custodia</button>
-                <button className="secundario" onClick={() => editarFicha(p)}>Datos de custodia</button>
+                <button className="secundario" onClick={() => pdt(p)}>PDT</button>
+                <button className="secundario" onClick={() => editarFicha(p)}>Datos del plan</button>
                 {p.comision_id && <button className="secundario" onClick={() => liberar(p)}>Liberar</button>}
                 <select value={destino[p.id] ?? ''} onChange={(e) => setDestino({ ...destino, [p.id]: e.target.value })} aria-label={`Integrante 1 para ${p.nombre}`}>
                   <option value="">Asignar a…</option>
@@ -117,7 +131,7 @@ export function PlanesOficina() {
                   ))}
                   <button onClick={() => guardarFicha(p)}>Guardar</button> <button className="secundario" onClick={() => setEditando(null)}>Cancelar</button>
                 </div>
-                <small>El nombre del proyecto es el nombre del plan. Si dejas vacío el código del muestreo se toma del nombre del plan (p. ej. 1128-26).</small>
+                <small>Sirven para la cadena de custodia y el PDT. El nombre del proyecto es el nombre del plan; si dejas vacío el código del muestreo se toma del nombre del plan (p. ej. 1128-26).</small>
               </td></tr>
             ),
           ])}

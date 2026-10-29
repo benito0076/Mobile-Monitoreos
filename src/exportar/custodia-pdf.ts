@@ -4,7 +4,10 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf
 import { COLUMNAS, columnaDe, filaTipo, matrizDe, type Matriz } from './custodia-mapa'
 import type { DatosPlan } from './exportador'
 
-export interface FichaCustodia { cliente?: string; codigo_muestreo?: string; cotizacion?: string; municipio?: string; departamento?: string }
+export interface FichaCustodia {
+  cliente?: string; codigo_muestreo?: string; cotizacion?: string; municipio?: string; departamento?: string
+  direccion?: string; contacto?: string; telefono?: string; telefono_campo?: string // solo los usa el PDT
+}
 export interface MuestraCustodia { codigo: string; punto: string; tipo: string | null; matriz: Matriz; parametros: string[]; inicio: Date | null; fin: Date | null }
 export interface DatosCustodia { proyecto: string; ficha: FichaCustodia; muestras: MuestraCustodia[]; responsables: string[] }
 
@@ -18,7 +21,7 @@ const CASILLA_MATRIZ: Record<Matriz, [number, number]> = {
   'SEDIMENTOS CONTINENTALES': [567.8, 576.5], 'RESIDUOS': [610.4, 636.1], 'OTRO': [661.5, 771.7],
 }
 // Campos del encabezado: [x inicial, ancho] sobre su línea (y de la línea = 93.4)
-const CAMPOS: Record<keyof FichaCustodia | 'proyecto', [number, number]> = {
+const CAMPOS: Record<'cliente' | 'proyecto' | 'codigo_muestreo' | 'cotizacion' | 'municipio' | 'departamento', [number, number]> = {
   cliente: [67, 87], proyecto: [216, 142], codigo_muestreo: [421.5, 44], cotizacion: [534, 42], municipio: [645, 33], departamento: [713, 58],
 }
 
