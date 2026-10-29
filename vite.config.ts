@@ -15,7 +15,11 @@ export default defineConfig({
       manifest: {
         name: 'Ambienciq · Monitoreos de campo',
         short_name: 'Monitoreos',
+        description: 'Registro de mediciones, descripciones y fotos de muestreo en campo, con o sin conexión.',
         lang: 'es-CO',
+        id: '/',
+        scope: '/',
+        categories: ['productivity', 'business'],
         display: 'standalone',
         start_url: '/',
         background_color: '#ffffff',
