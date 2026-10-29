@@ -25,6 +25,14 @@ export const correoDe = (entrada: string) => { const t = entrada.trim().toLowerC
 export const nombreUsuario = (correo: string | null) => (correo?.endsWith(`@${DOMINIO_USUARIOS}`) ? correo.slice(0, -DOMINIO_USUARIOS.length - 1) : correo)
 const fallo = (status: number, error: string): Respuesta => ({ status, json: { error } })
 
+/** Contraseña elegida por la oficina: vacía = se genera una; si viene, de 8 a 72 caracteres y sin espacios en los extremos. */
+function claveElegida(c: unknown): string | null | 'invalida' {
+  if (c == null || c === '') return null
+  const t = String(c)
+  return t.length >= 8 && t.length <= 72 && t === t.trim() ? t : 'invalida'
+}
+const CLAVE_INVALIDA = 'La contraseña debe tener entre 8 y 72 caracteres, sin espacios al inicio ni al final'
+
 /** Solo una cuenta de oficina activa puede administrar usuarios. La clave generada se devuelve una única vez. */
 export async function manejar(token: string | null, cuerpo: any, d: Deps): Promise<Respuesta> {
   const quien = token ? await d.usuarioDe(token) : null
@@ -41,7 +49,9 @@ export async function manejar(token: string | null, cuerpo: any, d: Deps): Promi
         return fallo(400, 'Usuario no válido: de 3 a 30 letras minúsculas, números, punto, guion o guion bajo (sin espacios ni tildes)')
       if (!nombre) return fallo(400, 'Falta el nombre')
       if (cuerpo.rol !== 'oficina' && cuerpo.rol !== 'comision') return fallo(400, 'Rol no válido')
-      const clave = d.generarClave()
+      const dada = claveElegida(cuerpo.clave)
+      if (dada === 'invalida') return fallo(400, CLAVE_INVALIDA)
+      const clave = dada ?? d.generarClave()
       const r = await d.crear(correo, clave)
       if ('error' in r) return fallo(400, /already|registered|exists/i.test(r.error) ? 'Ya existe un usuario con ese nombre' : r.error)
       try {
@@ -61,7 +71,9 @@ export async function manejar(token: string | null, cuerpo: any, d: Deps): Promi
     }
     case 'clave': {
       if (!(await d.perfil(String(cuerpo.id)))) return fallo(400, 'Usuario no válido')
-      const clave = d.generarClave()
+      const dada = claveElegida(cuerpo.clave)
+      if (dada === 'invalida') return fallo(400, CLAVE_INVALIDA)
+      const clave = dada ?? d.generarClave()
       await d.cambiarClave(cuerpo.id, clave)
       return { status: 200, json: { clave } }
     }

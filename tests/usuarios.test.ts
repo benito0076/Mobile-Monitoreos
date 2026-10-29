@@ -32,6 +32,21 @@ describe('usuario sin correo', () => {
   })
 })
 
+describe('contraseña elegida por la oficina', () => {
+  test('si se indica se usa; si falta se genera; si no es válida se rechaza', async () => {
+    const { d, reg } = falso({ of: O, co: C })
+    const nuevo = { accion: 'crear', usuario: 'ana', nombre: 'Ana', rol: 'comision' }
+    expect((await manejar('of', { ...nuevo, clave: 'Mi clave 2026' }, d)).json.clave).toBe('Mi clave 2026')
+    expect((await manejar('of', { ...nuevo, usuario: 'luis', clave: '' }, d)).json.clave).toBe('Clave12345ab')
+    for (const mala of ['corta', ' con espacios ', 'x'.repeat(73)]) expect((await manejar('of', { ...nuevo, usuario: 'pedro', clave: mala }, d)).status).toBe(400)
+    expect(reg.creados).toHaveLength(2) // las rechazadas no crean cuenta
+    expect((await manejar('of', { accion: 'clave', id: 'co', clave: 'Otra clave 99' }, d)).json.clave).toBe('Otra clave 99')
+    expect(reg.claves).toEqual(['co:Otra clave 99'])
+    expect((await manejar('of', { accion: 'clave', id: 'co', clave: 'corta' }, d)).status).toBe(400)
+    expect((await manejar('of', { accion: 'clave', id: 'co' }, d)).json.clave).toBe('Clave12345ab')
+  })
+})
+
 describe('gestionar-usuarios', () => {
   test('rechaza sin sesión o sin ser oficina activa', async () => {
     const { d } = falso({ of: O, co: C, off: { rol: 'oficina', activo: false } })
