@@ -15,6 +15,14 @@ export interface Deps {
 
 export interface Respuesta { status: number; json: Record<string, unknown> }
 const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const USUARIO = /^[a-z0-9._-]{3,30}$/
+
+/** Supabase Auth exige un correo. Quien entra con un nombre de usuario recibe uno interno con este dominio; nunca se le envía nada. */
+export const DOMINIO_USUARIOS = 'usuarios.ambienciq.invalid'
+/** «ana» → ana@dominio interno; un correo completo (cuentas anteriores) se deja igual. */
+export const correoDe = (entrada: string) => { const t = entrada.trim().toLowerCase(); return t.includes('@') ? t : `${t}@${DOMINIO_USUARIOS}` }
+/** Lo contrario, para mostrarlo: ana@dominio interno → ana. */
+export const nombreUsuario = (correo: string | null) => (correo?.endsWith(`@${DOMINIO_USUARIOS}`) ? correo.slice(0, -DOMINIO_USUARIOS.length - 1) : correo)
 const fallo = (status: number, error: string): Respuesta => ({ status, json: { error } })
 
 /** Solo una cuenta de oficina activa puede administrar usuarios. La clave generada se devuelve una única vez. */
@@ -26,21 +34,23 @@ export async function manejar(token: string | null, cuerpo: any, d: Deps): Promi
 
   switch (cuerpo?.accion) {
     case 'crear': {
-      const correo = String(cuerpo.correo ?? '').trim().toLowerCase()
+      const entrada = String(cuerpo.usuario ?? cuerpo.correo ?? '').trim().toLowerCase()
+      const correo = correoDe(entrada)
       const nombre = String(cuerpo.nombre ?? '').trim()
-      if (!CORREO.test(correo)) return fallo(400, 'Correo no válido')
+      if (entrada.includes('@') ? !CORREO.test(entrada) : !USUARIO.test(entrada))
+        return fallo(400, 'Usuario no válido: de 3 a 30 letras minúsculas, números, punto, guion o guion bajo (sin espacios ni tildes)')
       if (!nombre) return fallo(400, 'Falta el nombre')
       if (cuerpo.rol !== 'oficina' && cuerpo.rol !== 'comision') return fallo(400, 'Rol no válido')
       const clave = d.generarClave()
       const r = await d.crear(correo, clave)
-      if ('error' in r) return fallo(400, /already|registered|exists/i.test(r.error) ? 'Ya existe un usuario con ese correo' : r.error)
+      if ('error' in r) return fallo(400, /already|registered|exists/i.test(r.error) ? 'Ya existe un usuario con ese nombre' : r.error)
       try {
         await d.insertarPerfil({ id: r.id, rol: cuerpo.rol, nombre, correo })
       } catch (e) {
         await d.borrar(r.id) // sin perfil la cuenta no serviría: se deshace
         return fallo(500, `No se pudo crear el perfil: ${(e as Error).message}`)
       }
-      return { status: 200, json: { id: r.id, correo, clave } }
+      return { status: 200, json: { id: r.id, usuario: nombreUsuario(correo), correo, clave } }
     }
     case 'estado': {
       if (typeof cuerpo.activo !== 'boolean' || !(await d.perfil(String(cuerpo.id)))) return fallo(400, 'Usuario no válido')

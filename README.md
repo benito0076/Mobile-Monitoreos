@@ -21,6 +21,8 @@ Pruebas: `npm test` (lógica, lectura del Excel, cola de sincronización) y `npm
 
 Las demás cuentas se crean desde la pantalla **Usuarios**. La primera se crea a mano:
 
+> Los usuarios que crea la oficina entran con un **nombre de usuario** (sin correo); internamente se guarda como `usuario@usuarios.ambienciq.invalid` (`DOMINIO_USUARIOS` en `supabase/functions/gestionar-usuarios/logica.ts`). Las cuentas con correo real, como la de oficina, entran escribiendo el correo completo en el campo Usuario.
+
 1. Supabase → Authentication → Users → *Add user* (correo y contraseña, marcando *Auto Confirm User*).
 2. En el editor SQL: `insert into perfiles (id, rol, nombre, correo) select id, 'oficina', 'Oficina', email from auth.users where email = 'tu@correo';`
 

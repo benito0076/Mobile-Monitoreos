@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { manejar, type Deps } from '../supabase/functions/gestionar-usuarios/logica'
+import { correoDe, manejar, nombreUsuario, type Deps } from '../supabase/functions/gestionar-usuarios/logica'
 
 function falso(perfiles: Record<string, { rol: 'oficina' | 'comision'; activo: boolean }>) {
   const reg = { creados: [] as string[], borrados: [] as string[], perfiles: [] as any[], activo: [] as any[], bloqueos: [] as any[], claves: [] as string[], falloPerfil: false }
@@ -19,6 +19,19 @@ function falso(perfiles: Record<string, { rol: 'oficina' | 'comision'; activo: b
 const O = { rol: 'oficina', activo: true } as const
 const C = { rol: 'comision', activo: true } as const
 
+describe('usuario sin correo', () => {
+  test('el nombre de usuario se convierte en un correo interno y se muestra sin él', async () => {
+    expect(correoDe(' Ana.Perez ')).toBe('ana.perez@usuarios.ambienciq.invalid')
+    expect(correoDe('Jefe@Lab.co')).toBe('jefe@lab.co') // cuentas con correo real siguen igual
+    expect(nombreUsuario('ana.perez@usuarios.ambienciq.invalid')).toBe('ana.perez'); expect(nombreUsuario('jefe@lab.co')).toBe('jefe@lab.co')
+    const { d, reg } = falso({ of: O })
+    const r = await manejar('of', { accion: 'crear', usuario: 'Comision1', nombre: 'Comisión 1', rol: 'comision' }, d)
+    expect(r.json).toMatchObject({ usuario: 'comision1', correo: 'comision1@usuarios.ambienciq.invalid' })
+    expect(reg.perfiles[0]).toMatchObject({ correo: 'comision1@usuarios.ambienciq.invalid' })
+    for (const u of ['ab', 'con espacio', 'tildé', 'x'.repeat(31)]) expect((await manejar('of', { accion: 'crear', usuario: u, nombre: 'A', rol: 'comision' }, d)).status).toBe(400)
+  })
+})
+
 describe('gestionar-usuarios', () => {
   test('rechaza sin sesión o sin ser oficina activa', async () => {
     const { d } = falso({ of: O, co: C, off: { rol: 'oficina', activo: false } })
@@ -32,7 +45,7 @@ describe('gestionar-usuarios', () => {
   test('crea usuario con perfil y devuelve la clave generada', async () => {
     const { d, reg } = falso({ of: O })
     const r = await manejar('of', { accion: 'crear', correo: ' Ana@Lab.co ', nombre: 'Ana', rol: 'comision' }, d)
-    expect(r).toEqual({ status: 200, json: { id: 'id-ana@lab.co', correo: 'ana@lab.co', clave: 'Clave12345ab' } })
+    expect(r).toEqual({ status: 200, json: { id: 'id-ana@lab.co', usuario: 'ana@lab.co', correo: 'ana@lab.co', clave: 'Clave12345ab' } })
     expect(reg.perfiles).toEqual([{ id: 'id-ana@lab.co', rol: 'comision', nombre: 'Ana', correo: 'ana@lab.co' }])
   })
 
@@ -41,7 +54,7 @@ describe('gestionar-usuarios', () => {
     for (const b of [{ correo: 'x', nombre: 'A', rol: 'comision' }, { correo: 'a@b.co', nombre: ' ', rol: 'comision' }, { correo: 'a@b.co', nombre: 'A', rol: 'admin' }])
       expect((await manejar('of', { accion: 'crear', ...b }, d)).status).toBe(400)
     const r = await manejar('of', { accion: 'crear', correo: 'dup@lab.co', nombre: 'A', rol: 'comision' }, d)
-    expect(r.json.error).toBe('Ya existe un usuario con ese correo')
+    expect(r.json.error).toBe('Ya existe un usuario con ese nombre')
   })
 
   test('si falla el perfil se deshace la cuenta', async () => {

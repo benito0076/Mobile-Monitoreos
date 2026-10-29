@@ -11,6 +11,7 @@ import { medirDesfase } from './datos/reloj'
 import { Sincronizar } from './ui/campo/Sincronizar'
 import { local, metaGet, metaSet } from './datos/db-local'
 import { SelectorPlan, type PlanConConteo } from './ui/campo/SelectorPlan'
+import { nombreUsuario } from '../supabase/functions/gestionar-usuarios/logica'
 
 export function App() {
   const [sesion, setSesion] = useState<Session | null | undefined>(undefined)
@@ -54,7 +55,7 @@ export function App() {
         <div>
           <img src="/logo.png" alt="Ambienciq Ingenieros S.A.S" className="logo" />
           <div className="usuario">
-            <span title={sesion.user.email}>{sesion.user.email}{rol ? ` · ${rol}` : ''}</span>
+            <span title={nombreUsuario(sesion.user.email ?? '') ?? ''}>{nombreUsuario(sesion.user.email ?? '')}{rol ? ` · ${rol}` : ''}</span>
             <button className="secundario" onClick={() => supabase.auth.signOut()}>Salir</button>
           </div>
         </div>
