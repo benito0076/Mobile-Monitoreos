@@ -83,7 +83,10 @@ div.aviso, [role=alert].aviso { background: #fff4d6; border-left: 5px solid #e0a
 .estado.cerrada { background: var(--azul); color: #fff; }
 textarea { min-height: 5rem; }
 .fotos { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
-.fotos img { width: 6rem; height: 6rem; object-fit: cover; border-radius: 8px; border: 2px solid var(--borde); }
+.miniatura { position: relative; display: inline-block; }
+.fotos img { width: 6rem; height: 6rem; object-fit: cover; border-radius: 8px; border: 2px solid var(--borde); display: block; }
+.quitar-foto { position: absolute; top: .2rem; right: .2rem; min-height: 1.6rem; width: 1.6rem; padding: 0; border-radius: 999px; font-size: 1rem; line-height: 1; }
+.filtros-muestras { display: grid; grid-template-columns: 1fr auto; gap: .5rem; margin-bottom: .75rem; }
 .sync { display: grid; gap: .5rem; margin: .75rem 0 1rem; }
 code { background: #eceefb; padding: .1rem .4rem; border-radius: 4px; font-size: 1.05rem; }
 
@@ -101,6 +104,6 @@ code { background: #eceefb; padding: .1rem .4rem; border-radius: 4px; font-size:
 .casilla input, td input[type=checkbox] { width: 1.3rem; min-height: 1.3rem; padding: 0; }
 td input:not([type=checkbox]) { min-width: 5.5rem; min-height: 2.25rem; padding: .3rem .5rem; }
 p.toast { position: fixed; left: 1rem; right: 1rem; bottom: 1rem; max-width: 42rem; margin: 0 auto; z-index: 20; display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem;
-  background: var(--azul); color: #fff; border: 0; border-left: 6px solid var(--lima); border-radius: var(--radio); box-shadow: 0 6px 24px rgba(0, 0, 80, .35); padding: .8rem 1rem; }
+  background: var(--azul); color: #fff; border: 0; border-left: 6px solid var(--lima); border-radius: 10px; box-shadow: 0 6px 24px rgba(0, 0, 80, .35); padding: .8rem 1rem; }
 p.toast button { background: transparent; border: 0; color: #fff; min-height: 2rem; padding: 0 .5rem; font-size: 1.4rem; line-height: 1; }
 p.toast button:hover:not(:disabled) { background: rgba(255, 255, 255, .15); }

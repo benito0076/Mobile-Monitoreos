@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { local, type DescripcionLocal, type FotoLocal, type MedicionLocal, type MuestraLocal, type ParametroInsitu } from '../../datos/db-local'
-import { cambiarEstado, claveMedicion, corregirMedicion, esCompuesta, descripcionVigente, guardarDescripcion, guardarFoto, guardarMedicion, vigentes } from '../../datos/mediciones'
+import { cambiarEstado, claveMedicion, corregirMedicion, eliminarFotoPendiente, esCompuesta, descripcionVigente, guardarDescripcion, guardarFoto, guardarMedicion, vigentes } from '../../datos/mediciones'
 import { advertenciaGps, advertenciaRango, parsearValor } from '../../datos/validar-medicion'
 import { leerGps } from '../../datos/gps'
 import { comprimir } from '../../datos/fotos'
@@ -8,6 +8,23 @@ import { UMBRAL_GPS_M } from '../../config'
 import type { Gps } from '../../datos/db-local'
 
 type Aviso = { n: number; gps: Gps | null; adv: string[] }
+
+function MiniaturaFoto({ foto, alQuitar }: { foto: FotoLocal; alQuitar?: () => void }) {
+  const [url, setUrl] = useState('')
+  useEffect(() => {
+    const u = URL.createObjectURL(foto.blob)
+    setUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [foto.blob])
+  return (
+    <div className="miniatura">
+      {url && <img src={url} alt="Foto de la muestra" />}
+      {foto.sincronizado === 0 && alQuitar && (
+        <button type="button" className="secundario quitar-foto" aria-label="Quitar foto" title="Descartar esta foto (aún no sincronizada)" onClick={alQuitar}>×</button>
+      )}
+    </div>
+  )
+}
 
 function FilaMedicion({ muestra, nombre, alicuota, info, actual, usuario, umbral, alGuardar }: {
   muestra: string; nombre: string; alicuota?: number; info?: ParametroInsitu; actual?: MedicionLocal; usuario: string; umbral: number; alGuardar: () => void
@@ -132,6 +149,13 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
     } catch (x) { setMsg(`No se guardó la foto: ${(x as Error).message}`) }
   }
 
+  async function quitarFoto(fotoId: string) {
+    if (!confirm('¿Descartar esta foto?')) return
+    try { await eliminarFotoPendiente(fotoId); cargar() }
+    catch (x) { setMsg((x as Error).message) }
+  }
+
+  const maxAlicuotaConDatos = Math.max(1, ...[...med.values()].map((x) => x.alicuota ?? 0))
   const alicuotas: (number | undefined)[] = muestra && esCompuesta(muestra) ? Array.from({ length: abiertas }, (_, i) => i + 1) : [undefined]
 
   async function cerrar() {
@@ -154,7 +178,14 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
       <h3>Mediciones in situ</h3>
       {alicuotas.map((a) => (
         <div key={a ?? 0}>
-          {compuesta && <h4>Alícuota {a}</h4>}
+          {compuesta && (
+            <h4>
+              Alícuota {a}
+              {!cerrada && a === abiertas && abiertas > maxAlicuotaConDatos && (
+                <> <button type="button" className="secundario" onClick={() => setAbiertas(abiertas - 1)}>Quitar alícuota vacía</button></>
+              )}
+            </h4>
+          )}
           <ul className="planes">
             {params.map((p) => <FilaMedicion key={p} muestra={id} nombre={p} alicuota={a} info={insitu.get(p)} actual={med.get(claveMedicion(p, a))} usuario={usuario} umbral={umbral} alGuardar={cargar} />)}
           </ul>
@@ -175,7 +206,7 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
 
       <h3>Fotos ({fotos.length})</h3>
       <input type="file" accept="image/*" capture="environment" onChange={agregarFoto} />
-      <div className="fotos">{fotos.map((f) => <img key={f.id} src={URL.createObjectURL(f.blob)} alt="Foto de la muestra" />)}</div>
+      <div className="fotos">{fotos.map((f) => <MiniaturaFoto key={f.id} foto={f} alQuitar={() => quitarFoto(f.id)} />)}</div>
 
       {msg && <p role="status">{msg}</p>}
       {!cerrada && <button onClick={cerrar}>Cerrar muestra</button>}

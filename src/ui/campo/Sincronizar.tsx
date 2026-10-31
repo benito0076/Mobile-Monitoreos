@@ -4,6 +4,7 @@ import { supabase } from '../../datos/supabase'
 import { pendientes, purgarConfirmados, sincronizar, type Resultado } from '../../datos/sync'
 import { medirDesfase } from '../../datos/reloj'
 import { descargarJornada } from '../../datos/emergencia'
+import { bajarNovedadesPlanes } from '../../datos/planes'
 
 const CADA_MS = 60_000
 
@@ -28,6 +29,7 @@ export function Sincronizar() {
     try {
       await medirDesfase(supabase)
       const r: Resultado = await sincronizar(supabase)
+      await bajarNovedadesPlanes(supabase)
       await purgarConfirmados()
       const quedan = (await pendientes()).total
       setErrores(r.errores)

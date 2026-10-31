@@ -11,7 +11,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      workbox: { globPatterns: ['**/*.{js,css,html,png}'] }, // el logo también funciona sin conexión
+      workbox: { globPatterns: ['**/*.{js,css,html,png,pdf,xlsx}'] }, // el logo y las plantillas FM-017/FM-081 también funcionan sin conexión
       manifest: {
         name: 'Ambienciq · Monitoreos de campo',
         short_name: 'Monitoreos',

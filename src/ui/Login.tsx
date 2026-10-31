@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../datos/supabase'
 import { marcarInicioSesion } from '../datos/sesion'
-import { correoDe } from '../../supabase/functions/gestionar-usuarios/logica'
+import { correoDe } from '../datos/usuarios'
 
 export function Login() {
   const [usuario, setUsuario] = useState('')

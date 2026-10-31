@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../datos/supabase'
 import { Mensaje } from '../Mensaje'
 import { planesVisibles, type PlanDisponible } from '../../datos/planes'
-import { listarPerfiles, type Perfil } from '../../datos/usuarios'
+import { listarPerfiles, nombreUsuario, type Perfil } from '../../datos/usuarios'
 import { cargarDatosPlan } from '../../datos/exportar-datos'
+import { empaquetarFotosPlan, importarJornada } from '../../datos/emergencia'
 import { construirExportacion, exportarPlan } from '../../exportar/exportador'
 import type { FichaCustodia } from '../../exportar/custodia-pdf'
-import { nombreUsuario } from '../../../supabase/functions/gestionar-usuarios/logica'
 
 const CAMPOS_FICHA: [keyof FichaCustodia, string][] = [
   ['cliente', 'Nombre del cliente'], ['codigo_muestreo', 'Código del muestreo'], ['cotizacion', 'Número de cotización'], ['municipio', 'Municipio/Ciudad'], ['departamento', 'Departamento'],
@@ -91,10 +91,32 @@ export function PlanesOficina() {
       const datos = await cargarDatosPlan(supabase, p)
       const { resultados, fotos } = construirExportacion(datos)
       const { nombre, bytes } = exportarPlan(datos)
-      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([bytes])), download: nombre })
-      a.click(); URL.revokeObjectURL(a.href)
+      descargar(new Blob([bytes]), nombre)
       setEstado(`${nombre}: ${resultados.length} filas in situ (${resultados.filter((r) => r['Valor'] === null).length} sin medir), ${fotos.length} fotos, ${resultados.filter((r) => r['Marcada'] === 'Si').length} mediciones marcadas.`)
     } catch (e) { setEstado(`No se pudo exportar: ${(e as Error).message}`) }
+  }
+
+  async function bajarFotos(p: PlanDisponible) {
+    setEstado('Descargando fotos del plan…')
+    try {
+      const datos = await cargarDatosPlan(supabase, p)
+      if (!datos.fotos.length) return setEstado(`El plan «${p.nombre}» aún no tiene fotos registradas.`)
+      const { nombre, bytes, cantidad } = await empaquetarFotosPlan(supabase, p.nombre, datos.muestras, datos.fotos)
+      descargar(new Blob([bytes as BlobPart], { type: 'application/zip' }), nombre)
+      setEstado(`${nombre}: ${cantidad} foto${cantidad === 1 ? '' : 's'} descargada${cantidad === 1 ? '' : 's'}.`)
+    } catch (e) { setEstado(`No se pudieron descargar las fotos: ${(e as Error).message}`) }
+  }
+
+  async function subirEmergencia(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; e.target.value = ''
+    if (!f) return
+    setEstado('Importando respaldo de emergencia…')
+    try {
+      const r = await importarJornada(supabase, await f.text())
+      const resumen = `Importados: ${r.mediciones} mediciones, ${r.descripciones} descripciones, ${r.fotos} fotos, ${r.muestras} estados de muestra.`
+      setEstado(r.errores.length ? `${resumen} Errores (${r.errores.length}): ${r.errores.slice(0, 3).join('; ')}` : resumen)
+      cargar()
+    } catch (x) { setEstado(`No se pudo importar el respaldo: ${(x as Error).message}`) }
   }
 
   return (
@@ -115,6 +137,7 @@ export function PlanesOficina() {
               </td>
               <td><div className="acciones">
                 <button onClick={() => exportar(p)}>Exportar</button>
+                <button className="secundario" onClick={() => bajarFotos(p)}>Fotos (.zip)</button>
                 <button className="secundario" onClick={() => custodia(p)}>Cadena de custodia</button>
                 <button className="secundario" onClick={() => pdt(p)}>PDT</button>
                 <button className="secundario" onClick={() => editarFicha(p)}>Datos del plan</button>
@@ -144,6 +167,12 @@ export function PlanesOficina() {
           ])}
         </tbody>
       </table></div>
+
+      <div className="tarjeta ancha">
+        <b>Importar exportación de emergencia (.json)</b>
+        <small style={{ gridColumn: '1 / -1' }}>Si un plan se liberó o reasignó antes de que el teléfono sincronizara, sube aquí el archivo JSON generado con «Exportación de emergencia».</small>
+        <input type="file" accept=".json,application/json" aria-label="Importar exportación de emergencia" onChange={subirEmergencia} style={{ gridColumn: '1 / -1' }} />
+      </div>
     </section>
   )
 }

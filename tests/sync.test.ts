@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto'
+import { unzipSync } from 'fflate'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { local } from '../src/datos/db-local'
-import { exportarJornada } from '../src/datos/emergencia'
+import { empaquetarFotosPlan, exportarJornada, importarJornada } from '../src/datos/emergencia'
 import { cambiarEstado, corregirMedicion, guardarDescripcion, guardarFoto, guardarMedicion } from '../src/datos/mediciones'
 import { pendientes, purgarConfirmados, sincronizar } from '../src/datos/sync'
 
@@ -18,6 +19,7 @@ function servidor() {
     caida: 0,                      // las próximas N peticiones fallan por red
     rechazar: (_f: any): string | null => null,
     estadoOk: true,
+    errorEstado: null as string | null,
     db: {
       from: (t: string) => ({
         upsert: async (entrada: any, o: any) => {
@@ -25,19 +27,33 @@ function servidor() {
           s.llamadas++
           if (s.caida > 0) { s.caida--; return { error: RED } }
           if (!o?.ignoreDuplicates || o.onConflict !== 'id') throw new Error('upsert debe ser idempotente sobre id')
-          for (const f of filas) { const m = s.rechazar(f); if (m) return { error: { message: m, code: '23514' } } }
+          for (const f of filas) {
+            if ('bajado_en' in f || 'sincronizado' in f || 'error_sync' in f) throw new Error('campos locales enviados al servidor')
+            const m = s.rechazar(f); if (m) return { error: { message: m, code: '23514' } }
+          }
           for (const f of filas) { if (!tablas[t].has(f.id)) tablas[t].set(f.id, f); if (t === 'mediciones') orden.push(f.version) }
           return { error: null }
         },
-        update: (v: any) => ({ eq: (_c: string, id: string) => ({ select: async () => {
-          s.llamadas++
-          if (s.caida > 0) { s.caida--; return { error: RED, data: null } }
-          return { error: null, data: s.estadoOk ? [{ id }] : [] } } }) }),
+        update: (_v: any) => ({
+          eq: (_c: string, id: string) => {
+            const resp = async () => {
+              s.llamadas++
+              if (s.caida > 0) { s.caida--; return { error: RED, data: null } }
+              if (s.errorEstado) return { error: { message: s.errorEstado, code: 'P0001' }, data: null }
+              return { error: null, data: s.estadoOk ? [{ id }] : [] }
+            }
+            return { select: resp, then: (ok: any, no: any) => resp().then(ok, no) }
+          },
+        }),
       }),
-      storage: { from: () => ({ upload: async (ruta: string) => {
-        if (s.caida > 0) { s.caida--; return { error: RED } }
-        if (subidas.has(ruta)) return { error: { message: 'The resource already exists', statusCode: '409' } }
-        subidas.add(ruta); return { error: null } } }) },
+      storage: { from: () => ({
+        upload: async (ruta: string) => {
+          if (s.caida > 0) { s.caida--; return { error: RED } }
+          if (subidas.has(ruta)) return { error: { message: 'The resource already exists', statusCode: '409' } }
+          subidas.add(ruta); return { error: null }
+        },
+        download: async (ruta: string) => ({ data: new Blob([`contenido:${ruta}`]), error: null }),
+      }) },
     } as any,
   }
   return s
@@ -129,6 +145,15 @@ describe('sincronización', () => {
     expect((await pendientes()).muestras).toBe(1)
   })
 
+  test('si el compañero ya cerró la muestra en el servidor, adopta el estado cerrado sin error', async () => {
+    await cambiarEstado('m1', 'en_campo')
+    const s = servidor(); s.errorEstado = 'Una muestra cerrada no se reabre'
+    const r = await sincronizar(s.db, R)
+    expect(r.errores).toEqual([])
+    expect((await pendientes()).muestras).toBe(0)
+    expect((await local.muestras.get('m1'))?.estado).toBe('cerrada')
+  })
+
   test('dos disparos simultáneos comparten una sola sincronización', async () => {
     await jornada(); const s = servidor()
     const [a, b] = [sincronizar(s.db, R), sincronizar(s.db, R)]
@@ -137,7 +162,7 @@ describe('sincronización', () => {
   })
 })
 
-describe('retención y exportación de emergencia', () => {
+describe('retención, exportación e importación de emergencia y fotos ZIP', () => {
   test('purga lo confirmado antiguo y nunca lo pendiente', async () => {
     await jornada(); await sincronizar(servidor().db, R)
     await guardarMedicion({ ...base, parametro: 'OD', valor: '5' }) // pendiente
@@ -148,12 +173,28 @@ describe('retención y exportación de emergencia', () => {
     expect(await local.fotos.count()).toBe(0)
   })
 
-  test('exporta la jornada completa con fotos', async () => {
+  test('exporta la jornada completa con fotos y permite importarla en la oficina', async () => {
     await jornada()
     const { nombre, blob } = await exportarJornada()
-    const j = JSON.parse(await blob.text())
+    const texto = await blob.text()
+    const j = JSON.parse(texto)
     expect(j.mediciones).toHaveLength(3); expect(j.descripciones).toHaveLength(1)
     expect(atob(j.fotos[0].jpeg_base64)).toBe('jpg'); expect(j.fotos[0].blob).toBeUndefined()
     expect(nombre).toMatch(/^jornada_sin-plan_\d{4}-\d{2}-\d{2}\.json$/)
+
+    const s = servidor()
+    const imp = await importarJornada(s.db, texto)
+    expect(imp).toEqual({ mediciones: 3, descripciones: 1, fotos: 1, muestras: 1, errores: [] })
+    expect(s.tablas.mediciones.size).toBe(3)
+    expect(s.subidas.size).toBe(1)
+  })
+
+  test('empaqueta las fotos de un plan en un ZIP por código de muestra', async () => {
+    const s = servidor()
+    const zip = await empaquetarFotosPlan(s.db, 'Plan 1', [{ id: 'm1', codigo: '10500-26' }], [{ muestra_id: 'm1', ruta_storage: 'p1/10500-26/f1.jpg' }])
+    expect(zip.nombre).toBe('Plan_1_fotos.zip')
+    expect(zip.cantidad).toBe(1)
+    const entradas = Object.keys(unzipSync(zip.bytes))
+    expect(entradas).toEqual(['10500-26/f1.jpg'])
   })
 })

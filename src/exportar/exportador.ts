@@ -1,13 +1,14 @@
 // ÚNICO módulo que decide la forma del archivo final. El formato es provisional: se ajustará con el guion de Sampler.
 // Para cambiarlo basta con editar COLUMNAS / construirExportacion / aLibro; nada más depende de la forma del archivo.
 import * as XLSX from 'xlsx'
+import { elegirVigente as vigente } from '../datos/mediciones'
 
 export interface DatosPlan {
   plan: { nombre: string }
   muestras: { id: string; codigo: string; punto_texto: string; fecha_planeada?: string | null; tipo: string | null; matriz: string | null; submatriz: string | null; estado: string }[]
   parametros: { muestra_id: string; parametro: string; es_insitu: boolean }[]
   mediciones: { id: string; muestra_id: string; parametro: string; alicuota?: number | null; valor: string; unidad: string; hora_telefono: string; lat: number | null; lon: number | null; precision_m: number | null; usuario_id: string | null; equipo_id: string | null; version: number; reemplaza_a: string | null; motivo_correccion: string | null; marcada: boolean; motivo_marca: string | null }[]
-  descripciones: { muestra_id: string; texto: string; version: number }[]
+  descripciones: { muestra_id: string; texto: string; version: number; hora_telefono?: string }[]
   fotos: { muestra_id: string; ruta_storage: string; hora_telefono: string; lat: number | null; lon: number | null }[]
   usuarios: Record<string, string> // id → nombre
 }
@@ -15,10 +16,6 @@ export interface DatosPlan {
 type Fila = Record<string, string | number | boolean | null>
 
 export interface Exportacion { resultados: Fila[]; fotos: Fila[]; historial: Fila[] }
-
-// Dos integrantes pueden registrar el mismo dato desde teléfonos distintos: con la misma versión gana la lectura más reciente.
-const vigente = <T extends { version: number; hora_telefono?: string }>(a: T | undefined, b: T) =>
-  !a || b.version > a.version || (b.version === a.version && (b.hora_telefono ?? '') > (a.hora_telefono ?? '')) ? b : a
 
 /**
  * Una fila por muestra y parámetro IN SITU (valor vigente; vacío si aún no se midió); en muestras compuestas, una por

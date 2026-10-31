@@ -1,6 +1,6 @@
 // Cadena de custodia FM-017 v17: escribe los datos sobre el PDF original del laboratorio (public/fm-017.pdf) para conservar el formato controlado.
 // Las coordenadas (puntos PDF, origen arriba-izquierda) se midieron sobre ese PDF; si el formato cambia de versión hay que revisarlas.
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib'
 import { COLUMNAS, columnaDe, filaTipo, matrizDe, type Matriz } from './custodia-mapa'
 import type { DatosPlan } from './exportador'
 
@@ -26,8 +26,10 @@ const CAMPOS: Record<'cliente' | 'proyecto' | 'codigo_muestreo' | 'cotizacion' |
 }
 
 const dos = (n: number) => String(n).padStart(2, '0')
-const fecha = (d: Date) => `${dos(d.getDate())}/${dos(d.getMonth() + 1)}/${d.getFullYear()}`
-const hora = (d: Date) => `${dos(d.getHours())}:${dos(d.getMinutes())}`
+// El laboratorio opera en Colombia (UTC-5, sin horario de verano): se formatea siempre en hora de Colombia.
+const enColombia = (d: Date) => new Date(d.getTime() - 5 * 3600_000)
+const fecha = (d: Date) => { const c = enColombia(d); return `${dos(c.getUTCDate())}/${dos(c.getUTCMonth() + 1)}/${c.getUTCFullYear()}` }
+const hora = (d: Date) => { const c = enColombia(d); return `${dos(c.getUTCHours())}:${dos(c.getUTCMinutes())}` }
 
 /** Arma lo que el formato necesita a partir de los datos del plan; solo parámetros de laboratorio (los in situ no van en la custodia). */
 export function armarCustodia(d: DatosPlan, ficha: FichaCustodia = {}): DatosCustodia {

@@ -37,7 +37,7 @@ export async function pendientes() {
 }
 
 type Versionado = { id: string; version: number; sincronizado: number; error_sync?: string }
-const LOCALES = ['sincronizado', 'error_sync']
+const LOCALES = ['sincronizado', 'error_sync', 'bajado_en']
 const limpio = (r: object): Fila => Object.fromEntries(Object.entries(r).filter(([k]) => !LOCALES.includes(k)))
 
 /**
@@ -101,8 +101,15 @@ async function ejecutar(db: Db, o: Required<Opciones>): Promise<Resultado> {
     // El estado va al final: una muestra no figura cerrada en el servidor antes de que lleguen sus datos.
     for (const m of await local.muestras.filter((x) => !!x.estado_pendiente).toArray()) {
       const r = await pedir(() => db.from('muestras').update({ estado: m.estado }).eq('id', m.id).select('id'), o.esperaMs)
-      if (r.error || !r.data?.length) res.errores.push(`muestra ${m.codigo}: ${r.error?.message ?? 'el servidor no la actualizó (¿plan reasignado?)'}`)
-      else { await local.muestras.update(m.id, { estado_pendiente: 0 }); res.enviados.muestras++ }
+      if (r.error && /cerrada no se reabre/i.test(r.error.message)) {
+        // El otro integrante de la comisión ya cerró esta muestra en el servidor: adoptamos el estado cerrado y limpiamos el pendiente.
+        await local.muestras.update(m.id, { estado: 'cerrada', estado_pendiente: 0 })
+        res.enviados.muestras++
+      } else if (r.error || !r.data?.length) {
+        res.errores.push(`muestra ${m.codigo}: ${r.error?.message ?? 'el servidor no la actualizó (¿plan reasignado?)'}`)
+      } else {
+        await local.muestras.update(m.id, { estado_pendiente: 0 }); res.enviados.muestras++
+      }
     }
   } catch (e) {
     if (!(e instanceof SinConexion)) throw e

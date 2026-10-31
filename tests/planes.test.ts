@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { local } from '../src/datos/db-local'
-import { tomarPlan } from '../src/datos/planes'
+import { bajarNovedadesPlanes, tomarPlan } from '../src/datos/planes'
 
 const PLAN = { id: 'p1', nombre: 'Plan 1' }
 
@@ -39,6 +39,18 @@ describe('descargar lo del compañero', () => {
     expect(x).toMatchObject({ valor: '7', sincronizado: 1, usuario_id: 'u2' }); expect('muestras' in x).toBe(false)
     expect(await local.mediciones.get('propia')).toMatchObject({ valor: '7', sincronizado: 0 }) // la pendiente no se pisa
     expect(await local.descripciones.get('d1')).toMatchObject({ texto: 'Orilla', sincronizado: 1 })
+  })
+
+  test('bajarNovedadesPlanes incorpora nuevas lecturas y estados cerrados del compañero durante la sincronización', async () => {
+    await tomarPlan(falso(true), PLAN, 'u1')
+    await bajarNovedadesPlanes(falso(true, 0, 'p1', {
+      mediciones: [ajena],
+      descripciones_punto: [desc],
+      muestras: [{ id: 'm1', estado: 'cerrada' }],
+    }))
+    expect(await local.mediciones.get('x1')).toMatchObject({ valor: '7', sincronizado: 1 })
+    expect(await local.descripciones.get('d1')).toMatchObject({ texto: 'Orilla', sincronizado: 1 })
+    expect((await local.muestras.get('m1'))?.estado).toBe('cerrada')
   })
 
   test('actualizar de nuevo no duplica, y la purga cuenta desde que se bajó (no desde que se midió)', async () => {

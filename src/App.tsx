@@ -4,14 +4,15 @@ import { supabase } from './datos/supabase'
 import { Login } from './ui/Login'
 import { PanelOficina } from './ui/oficina/PanelOficina'
 import { ElegirPlan } from './ui/campo/ElegirPlan'
-import { cerrarSiVencida } from './datos/sesion'
+import { asegurarUsuarioLocal, cerrarSiVencida } from './datos/sesion'
 import { ListaMuestras } from './ui/campo/ListaMuestras'
 import { FormMuestra } from './ui/campo/FormMuestra'
 import { medirDesfase } from './datos/reloj'
 import { Sincronizar } from './ui/campo/Sincronizar'
 import { local, metaGet, metaSet } from './datos/db-local'
 import { SelectorPlan, type PlanConConteo } from './ui/campo/SelectorPlan'
-import { nombreUsuario } from '../supabase/functions/gestionar-usuarios/logica'
+import { nombreUsuario } from './datos/usuarios'
+import { pendientes } from './datos/sync'
 
 export function App() {
   const [sesion, setSesion] = useState<Session | null | undefined>(undefined)
@@ -33,9 +34,16 @@ export function App() {
   const usar = async (id: string) => { await metaSet('plan_activo', id); setAbierta(null); await leerLocal() }
   const planLocal = planes.find((p) => p.id === activoId)
 
+  async function salir() {
+    if (rol === 'comision') {
+      const p = await pendientes()
+      if (p.total > 0 && !confirm(`Tienes ${p.total} dato${p.total === 1 ? '' : 's'} pendiente${p.total === 1 ? '' : 's'} de sincronizar en este teléfono.\n\n¿Seguro que quieres cerrar sesión ahora?`)) return
+    }
+    await supabase.auth.signOut({ scope: 'local' })
+  }
+
   useEffect(() => {
-    cerrarSiVencida().then(() => supabase.auth.getSession()).then(({ data }) => setSesion(data.session))
-    leerLocal()
+    cerrarSiVencida(supabase).then(() => supabase.auth.getSession()).then(({ data }) => setSesion(data.session))
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSesion(s))
     return () => data.subscription.unsubscribe()
   }, [])
@@ -43,6 +51,7 @@ export function App() {
   useEffect(() => {
     if (!sesion) return setRol(null)
     if (navigator.onLine) medirDesfase(supabase)
+    asegurarUsuarioLocal(sesion.user.id).then(() => leerLocal())
     supabase.from('perfiles').select('rol').eq('id', sesion.user.id).single().then(({ data }) => setRol(data?.rol ?? null))
   }, [sesion])
 
@@ -56,7 +65,7 @@ export function App() {
           <img src="/logo.png" alt="Ambienciq Ingenieros S.A.S" className="logo" />
           <div className="usuario">
             <span title={nombreUsuario(sesion.user.email ?? '') ?? ''}>{nombreUsuario(sesion.user.email ?? '')}{rol ? ` · ${rol}` : ''}</span>
-            <button className="secundario" onClick={() => supabase.auth.signOut()}>Salir</button>
+            <button className="secundario" onClick={salir}>Salir</button>
           </div>
         </div>
       </header>

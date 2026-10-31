@@ -18,13 +18,17 @@ export const esCompuesta = (m: { tipo: string | null }) => m.tipo?.trim().toLowe
 /** Clave de una medición dentro de su muestra: el parámetro, y la alícuota si la muestra es compuesta. */
 export const claveMedicion = (parametro: string, alicuota?: number | null) => (alicuota ? `${parametro}\n${alicuota}` : parametro)
 
-/** Medición vigente (mayor versión) de cada parámetro (y alícuota) de una muestra, por claveMedicion. */
+/** Dos integrantes pueden registrar el mismo dato desde teléfonos distintos: con la misma versión gana la lectura más reciente. */
+export const elegirVigente = <T extends { version: number; hora_telefono?: string }>(a: T | undefined, b: T) =>
+  !a || b.version > a.version || (b.version === a.version && (b.hora_telefono ?? '') > (a.hora_telefono ?? '')) ? b : a
+
+/** Medición vigente (mayor versión; si empatan, la más reciente) de cada parámetro (y alícuota) de una muestra, por claveMedicion. */
 export async function vigentes(muestra_id: string) {
   const todas = await local.mediciones.where('muestra_id').equals(muestra_id).toArray()
   const m = new Map<string, MedicionLocal>()
   for (const x of todas) {
     const k = claveMedicion(x.parametro, x.alicuota)
-    if (!m.has(k) || m.get(k)!.version < x.version) m.set(k, x)
+    m.set(k, elegirVigente(m.get(k), x))
   }
   return m
 }
@@ -68,7 +72,7 @@ export async function corregirMedicion(e: Entrada & { motivo: string }) {
 
 export async function descripcionVigente(muestra_id: string) {
   const d = await local.descripciones.where('muestra_id').equals(muestra_id).toArray()
-  return d.sort((a, b) => b.version - a.version)[0]
+  return d.reduce<DescripcionLocal | undefined>((acc, x) => elegirVigente(acc, x), undefined)
 }
 
 /** Primera descripción, o corrección (con motivo obligatorio) si ya había una. */
@@ -96,6 +100,14 @@ export async function guardarFoto(muestra_id: string, blob: Blob, gps: Gps | nul
   }
   await local.fotos.add(r)
   return r
+}
+
+/** Permite descartar una foto tomada por error antes de que se sincronice con el servidor. */
+export async function eliminarFotoPendiente(id: string) {
+  const f = await local.fotos.get(id)
+  if (!f) return
+  if (f.sincronizado !== 0) throw new Error('Una foto ya sincronizada con el servidor no se puede borrar')
+  await local.fotos.delete(id)
 }
 
 /** pendiente → en_campo → cerrada. Una muestra cerrada no se reabre (sus datos se corrigen con versiones). */

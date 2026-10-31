@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../datos/supabase'
-import { gestionarUsuarios, listarPerfiles, type Perfil } from '../../datos/usuarios'
-import { nombreUsuario } from '../../../supabase/functions/gestionar-usuarios/logica'
+import { gestionarUsuarios, listarPerfiles, nombreUsuario, type Perfil } from '../../datos/usuarios'
 
 export function Usuarios({ yo }: { yo: string }) {
   const [perfiles, setPerfiles] = useState<Perfil[]>([])

@@ -22,6 +22,9 @@ export function planesVisibles(db: Db) {
   return todo<PlanDisponible>((a, b) => db.from('planes').select('id,nombre,comision_id,comision_id_2,tomado_en,creado_en,ficha').order('creado_en').range(a, b))
 }
 
+const COLS_MED = 'id,muestra_id,parametro,alicuota,valor,unidad,hora_telefono,desfase_reloj_s,lat,lon,precision_m,usuario_id,equipo_id,version_app,version,reemplaza_a,motivo_correccion'
+const COLS_DESC = 'id,muestra_id,texto,hora_telefono,usuario_id,version,reemplaza_a,motivo_correccion'
+
 /** Descarga el plan completo al teléfono, reemplazando lo anterior de ese plan en una sola transacción. */
 export async function descargarPlan(db: Db, plan: { id: string; nombre: string }, comisionId: string) {
   const muestras = await todo<any>((a, b) => db.from('muestras').select('*').eq('plan_id', plan.id).order('codigo').range(a, b))
@@ -33,13 +36,17 @@ export async function descargarPlan(db: Db, plan: { id: string; nombre: string }
   // Lo que ya registró el compañero (o este mismo usuario desde otro teléfono): así los dos ven lo mismo y pueden corregirlo.
   const delPlan = (tabla: string, cols: string) =>
     todo<any>((a, b) => db.from(tabla).select(`${cols},muestras!inner(plan_id)`).eq('muestras.plan_id', plan.id).order('id').range(a, b))
-  const mediciones = await delPlan('mediciones', 'id,muestra_id,parametro,alicuota,valor,unidad,hora_telefono,desfase_reloj_s,lat,lon,precision_m,usuario_id,equipo_id,version_app,version,reemplaza_a,motivo_correccion')
-  const descripciones = await delPlan('descripciones_punto', 'id,muestra_id,texto,hora_telefono,usuario_id,version,reemplaza_a,motivo_correccion')
+  const mediciones = await delPlan('mediciones', COLS_MED)
+  const descripciones = await delPlan('descripciones_punto', COLS_DESC)
 
   await local.transaction('rw', [local.planes, local.muestras, local.muestraParametros, local.parametrosInsitu, local.config, local.mediciones, local.descripciones], async () => {
     const previas = await local.muestras.where('plan_id').equals(plan.id).toArray()
     const pendientes = new Map(previas.filter((m) => m.estado_pendiente).map((m) => [m.id, m]))
-    for (const m of muestras) if (pendientes.has(m.id)) Object.assign(m, { estado: pendientes.get(m.id)!.estado, estado_pendiente: 1 })
+    for (const m of muestras) {
+      if (pendientes.has(m.id) && m.estado !== 'cerrada') {
+        Object.assign(m, { estado: pendientes.get(m.id)!.estado, estado_pendiente: 1 })
+      }
+    }
     const ids = previas.map((m) => m.id)
     await local.muestraParametros.where('muestra_id').anyOf(ids).delete()
     await local.muestras.where('plan_id').equals(plan.id).delete()
@@ -56,6 +63,40 @@ export async function descargarPlan(db: Db, plan: { id: string; nombre: string }
     }
   })
   return muestras.length
+}
+
+/**
+ * Trae mediciones, descripciones y estados nuevos del compañero para los planes ya descargados en este teléfono,
+ * sin pisar lo que esté pendiente de sincronizar localmente.
+ */
+export async function bajarNovedadesPlanes(db: Pick<SupabaseClient, 'from'>) {
+  const planes = await local.planes.toArray()
+  for (const p of planes) {
+    try {
+      const delPlan = (tabla: string, cols: string) =>
+        todo<any>((a, b) => db.from(tabla).select(`${cols},muestras!inner(plan_id)`).eq('muestras.plan_id', p.id).order('id').range(a, b))
+      const [mediciones, descripciones, muestrasRemotas] = await Promise.all([
+        delPlan('mediciones', COLS_MED),
+        delPlan('descripciones_punto', COLS_DESC),
+        todo<any>((a, b) => db.from('muestras').select('id,estado').eq('plan_id', p.id).order('id').range(a, b)),
+      ])
+      const bajado_en = new Date().toISOString()
+      await local.transaction('rw', [local.muestras, local.mediciones, local.descripciones], async () => {
+        for (const [tabla, filas] of [[local.mediciones, mediciones], [local.descripciones, descripciones]] as const) {
+          const ya = await (tabla as any).bulkGet(filas.map((f) => f.id))
+          await (tabla as any).bulkAdd(filas.filter((_, i) => !ya[i]).map(({ muestras: _, ...f }) => ({ ...f, sincronizado: 1, bajado_en })))
+        }
+        for (const mr of muestrasRemotas) {
+          const ml = await local.muestras.get(mr.id)
+          if (ml && (!ml.estado_pendiente || mr.estado === 'cerrada') && ml.estado !== mr.estado) {
+            await local.muestras.update(mr.id, { estado: mr.estado, estado_pendiente: 0 })
+          }
+        }
+      })
+    } catch {
+      // Si falla la descarga opcional (corte de señal o mock parcial en pruebas), no interrumpe la sincronización.
+    }
+  }
 }
 
 /** Elige el plan (requiere conexión). 'tomado' = otra comisión lo tomó antes; no se escribe nada local. */

@@ -1,4 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { correoDe, DOMINIO_USUARIOS, nombreUsuario } from '../../supabase/functions/gestionar-usuarios/logica'
+
+export { correoDe, DOMINIO_USUARIOS, nombreUsuario }
 
 export interface Perfil { id: string; nombre: string; rol: 'oficina' | 'comision'; activo: boolean; correo: string | null }
 

@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { local, metaSet } from '../src/datos/db-local'
-import { cambiarEstado, corregirMedicion, guardarDescripcion, guardarFoto, claveMedicion, guardarMedicion, vigentes } from '../src/datos/mediciones'
+import { cambiarEstado, corregirMedicion, eliminarFotoPendiente, guardarDescripcion, guardarFoto, claveMedicion, guardarMedicion, vigentes } from '../src/datos/mediciones'
+import { asegurarUsuarioLocal } from '../src/datos/sesion'
 import { advertencias, parsearValor } from '../src/datos/validar-medicion'
 
 const gps = { lat: 7.1, lon: -73.1, precision_m: 8 }
@@ -64,9 +65,17 @@ describe('mediciones', () => {
     const v3 = await corregirMedicion({ ...base, valor: '7.5', motivo: 'Otra vez' })
     expect(v3.reemplaza_a).toBe(v2.id)
   })
+
+  test('misma versión desde dos teléfonos: vigentes() elige la más reciente, igual que el exportador', async () => {
+    await local.mediciones.bulkAdd([
+      { id: 'a', muestra_id: 'm1', parametro: 'pH', valor: '7.0', unidad: 'u', hora_telefono: '2026-10-23T10:05:00Z', desfase_reloj_s: 0, lat: null, lon: null, precision_m: null, usuario_id: 'u1', equipo_id: 'e1', version_app: '1', version: 1, reemplaza_a: null, motivo_correccion: null, sincronizado: 1 },
+      { id: 'b', muestra_id: 'm1', parametro: 'pH', valor: '6.5', unidad: 'u', hora_telefono: '2026-10-23T10:00:00Z', desfase_reloj_s: 0, lat: null, lon: null, precision_m: null, usuario_id: 'u2', equipo_id: 'e2', version_app: '1', version: 1, reemplaza_a: null, motivo_correccion: null, sincronizado: 1 },
+    ])
+    expect((await vigentes('m1')).get('pH')!.valor).toBe('7.0')
+  })
 })
 
-describe('descripción, fotos y estado', () => {
+describe('descripción, fotos, estado y cambio de usuario', () => {
   test('descripción: primera libre, cambios con motivo', async () => {
     await guardarDescripcion('m1', ' Orilla norte ', 'u1')
     await expect(guardarDescripcion('m1', 'Orilla sur', 'u1')).rejects.toThrow('motivo')
@@ -75,14 +84,32 @@ describe('descripción, fotos y estado', () => {
     expect(await local.descripciones.count()).toBe(2)
   })
 
-  test('foto se guarda por código de muestra', async () => {
+  test('foto se guarda por código de muestra y se puede descartar mientras no esté sincronizada', async () => {
     const f = await guardarFoto('m1', new Blob(['x']), gps, 'u1')
     expect(f.ruta_storage).toBe(`p1/10500-26/${f.id}.jpg`)
+    await eliminarFotoPendiente(f.id)
+    expect(await local.fotos.count()).toBe(0)
+
+    const f2 = await guardarFoto('m1', new Blob(['x']), gps, 'u1')
+    await local.fotos.update(f2.id, { sincronizado: 1 })
+    await expect(eliminarFotoPendiente(f2.id)).rejects.toThrow('sincronizada')
   })
 
   test('el estado avanza y una muestra cerrada no se reabre', async () => {
     await cambiarEstado('m1', 'en_campo'); await cambiarEstado('m1', 'cerrada'); await cambiarEstado('m1', 'en_campo')
     expect(await local.muestras.get('m1')).toMatchObject({ estado: 'cerrada', estado_pendiente: 1 })
+  })
+
+  test('al cambiar de usuario se limpian los planes y datos ya sincronizados del usuario anterior', async () => {
+    await local.planes.add({ id: 'p1', nombre: 'Plan 1', comision_id: 'u1', descargado_en: '2026-10-23T10:00:00Z' })
+    const m = await guardarMedicion({ ...base, valor: '7' })
+    await local.mediciones.update(m.id, { sincronizado: 1 })
+    await asegurarUsuarioLocal('u1')
+    expect(await local.planes.count()).toBe(1)
+
+    await asegurarUsuarioLocal('u2')
+    expect(await local.planes.count()).toBe(0)
+    expect(await local.mediciones.count()).toBe(0)
   })
 })
 
