@@ -7,7 +7,7 @@ type Fila = Record<string, unknown>
 interface Opciones { esperaMs?: number; lote?: number }
 
 export interface Resultado {
-  enviados: { mediciones: number; descripciones: number; fotos: number; muestras: number }
+  enviados: { mediciones: number; descripciones: number; fotos: number; muestras: number; envios: number }
   errores: string[]
   sinConexion: boolean
 }
@@ -27,13 +27,15 @@ async function pedir<T extends { error: any }>(fn: () => PromiseLike<T>, esperaM
 }
 
 export async function pendientes() {
-  const [mediciones, descripciones, fotos, muestras] = await Promise.all([
+  const [mediciones, descripciones, fotos, muestras, envios, enviosMuestras] = await Promise.all([
     local.mediciones.where('sincronizado').equals(0).count(),
     local.descripciones.where('sincronizado').equals(0).count(),
     local.fotos.where('sincronizado').equals(0).count(),
     local.muestras.filter((m) => !!m.estado_pendiente).count(),
+    local.envios.where('sincronizado').equals(0).count(),
+    local.envioMuestras.where('sincronizado').equals(0).count(),
   ])
-  return { mediciones, descripciones, fotos, muestras, total: mediciones + descripciones + fotos + muestras }
+  return { mediciones, descripciones, fotos, muestras, envios: envios + enviosMuestras, total: mediciones + descripciones + fotos + muestras + envios + enviosMuestras }
 }
 
 type Versionado = { id: string; version: number; reemplaza_a?: string | null; sincronizado: number; error_sync?: string }
@@ -100,7 +102,7 @@ export function sincronizar(db: Db, opciones: Opciones = {}): Promise<Resultado>
 }
 
 async function ejecutar(db: Db, o: Required<Opciones>): Promise<Resultado> {
-  const res: Resultado = { enviados: { mediciones: 0, descripciones: 0, fotos: 0, muestras: 0 }, errores: [], sinConexion: false }
+  const res: Resultado = { enviados: { mediciones: 0, descripciones: 0, fotos: 0, muestras: 0, envios: 0 }, errores: [], sinConexion: false }
   const marcar = (t: 'mediciones' | 'descripciones') => (ids: string[]) =>
     (local[t] as any).where('id').anyOf(ids).modify({ sincronizado: 1, error_sync: undefined })
   const fallo = (t: 'mediciones' | 'descripciones') => (id: string, msg: string) => (local[t] as any).update(id, { error_sync: msg })
@@ -123,11 +125,30 @@ async function ejecutar(db: Db, o: Required<Opciones>): Promise<Resultado> {
         await local.muestras.update(m.id, { estado_pendiente: 0 }); res.enviados.muestras++
       }
     }
+    await enviarEnvios(db, o, res)
   } catch (e) {
     if (!(e instanceof SinConexion)) throw e
     res.sinConexion = true
   }
   return res
+}
+
+/** Envíos al laboratorio: primero el envío y después sus muestras (que ya llegaron cerradas). Reintentar nunca duplica. */
+async function enviarEnvios(db: Db, o: Required<Opciones>, res: Resultado) {
+  for (const e of await local.envios.where('sincronizado').equals(0).toArray()) {
+    const r = await pedir(() => db.from('envios').upsert(limpio(e), { onConflict: 'id', ignoreDuplicates: true }), o.esperaMs)
+    if (r.error) { await local.envios.update(e.id, { error_sync: r.error.message }); res.errores.push(`envío ${e.fecha}: ${r.error.message}`); continue }
+    await local.envios.update(e.id, { sincronizado: 1, error_sync: undefined }); res.enviados.envios++
+  }
+  for (const u of await local.envioMuestras.where('sincronizado').equals(0).toArray()) {
+    if ((await local.envios.get(u.envio_id))?.sincronizado !== 1) continue // el envío aún no llegó
+    const r = await pedir(() => db.from('envio_muestras').upsert(limpio(u), { onConflict: 'envio_id,muestra_id', ignoreDuplicates: true }), o.esperaMs)
+    if (r.error) {
+      const m = /duplicate|unique|envio_muestras_muestra_id_key/i.test(r.error.message) ? 'La muestra ya va en otro envío; avisa a la oficina' : r.error.message
+      await local.envioMuestras.update(u.muestra_id, { error_sync: m }); res.errores.push(`envío de la muestra ${u.muestra_id}: ${m}`); continue
+    }
+    await local.envioMuestras.update(u.muestra_id, { sincronizado: 1, error_sync: undefined })
+  }
 }
 
 /** Borra lo ya confirmado que tenga más de RETENCION_DIAS días; lo pendiente nunca se borra. */

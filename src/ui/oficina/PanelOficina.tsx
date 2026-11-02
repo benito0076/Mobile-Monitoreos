@@ -13,7 +13,7 @@ export function PanelOficina({ yo }: { yo: string }) {
       <nav className="pestanas">
         {PESTANAS.map((p) => <button key={p} className={p === vista ? '' : 'secundario'} onClick={() => setVista(p)}>{p}</button>)}
       </nav>
-      {vista === 'Planes' && <PlanesOficina />}
+      {vista === 'Planes' && <PlanesOficina yo={yo} />}
       {vista === 'Cargar plan' && <CargarPlan />}
       {vista === 'Parámetros in situ' && <ParametrosInsitu />}
       {vista === 'Usuarios' && <Usuarios yo={yo} />}

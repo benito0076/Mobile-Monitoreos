@@ -7,6 +7,8 @@ import { cargarDatosPlan } from '../../datos/exportar-datos'
 import { empaquetarFotosPlan, importarJornada } from '../../datos/emergencia'
 import { construirExportacion, exportarPlan } from '../../exportar/exportador'
 import type { FichaCustodia } from '../../exportar/custodia-pdf'
+import { PanelEnvios } from '../envios/PanelEnvios'
+import { fuenteServidor } from '../envios/fuentes'
 
 const CAMPOS_FICHA: [keyof FichaCustodia, string][] = [
   ['cliente', 'Nombre del cliente'], ['codigo_muestreo', 'Código del muestreo'], ['cotizacion', 'Número de cotización'], ['municipio', 'Municipio/Ciudad'], ['departamento', 'Departamento'],
@@ -17,7 +19,7 @@ const descargar = (blob: Blob, nombre: string) => {
   a.click(); URL.revokeObjectURL(a.href)
 }
 
-export function PlanesOficina() {
+export function PlanesOficina({ yo }: { yo: string }) {
   const [planes, setPlanes] = useState<PlanDisponible[]>([])
   const [avances, setAvances] = useState<Record<string, AvancePlan>>({})
   const [comisiones, setComisiones] = useState<Perfil[]>([]) // activas: se pueden asignar
@@ -27,6 +29,7 @@ export function PlanesOficina() {
   const [estado, setEstado] = useState('')
   const [editando, setEditando] = useState<string | null>(null) // plan cuyos datos de custodia se editan
   const [ficha, setFicha] = useState<FichaCustodia>({})
+  const [enviosDe, setEnviosDe] = useState<string | null>(null) // plan cuyos envíos al laboratorio se muestran
   const [confirmacion, setConfirmacion] = useState<{ planId: string; texto: string; ejecutar: () => void } | null>(null)
 
   const cargar = () =>
@@ -160,7 +163,8 @@ export function PlanesOficina() {
                 <td><div className="acciones">
                   <button onClick={() => exportar(p)}>Exportar</button>
                   <button className="secundario" onClick={() => bajarFotos(p)}>Fotos (.zip)</button>
-                  <button className="secundario" onClick={() => custodia(p)}>Cadena de custodia</button>
+                  <button className="secundario" onClick={() => setEnviosDe(enviosDe === p.id ? null : p.id)}>Envíos</button>
+                  <button className="secundario" onClick={() => custodia(p)}>Custodia: todo el plan</button>
                   <button className="secundario" onClick={() => pdt(p)}>PDT</button>
                   <button className="secundario" onClick={() => editarFicha(p)}>Datos del plan</button>
                   {p.comision_id && <button className="secundario" onClick={() => liberar(p)}>Liberar</button>}
@@ -182,6 +186,11 @@ export function PlanesOficina() {
                     <button onClick={confirmacion.ejecutar}>Confirmar</button>
                     <button className="secundario" onClick={() => setConfirmacion(null)}>Cancelar</button>
                   </div>
+                </td></tr>
+              ),
+              enviosDe === p.id && (
+                <tr key={`${p.id}-envios`}><td colSpan={4}>
+                  <PanelEnvios fuente={fuenteServidor(supabase, p, integrantes(p).flatMap((x) => x?.nombre ?? []), perfiles.find((x) => x.id === yo)?.nombre ?? '')} />
                 </td></tr>
               ),
               editando === p.id && (

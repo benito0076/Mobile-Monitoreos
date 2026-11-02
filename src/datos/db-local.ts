@@ -1,6 +1,10 @@
 import Dexie, { type Table } from 'dexie'
+import type { FichaCustodia } from '../exportar/custodia-pdf'
 
-export interface PlanLocal { id: string; nombre: string; comision_id: string; descargado_en: string; ultimo_servidor?: string }
+export interface PlanLocal {
+  id: string; nombre: string; comision_id: string; descargado_en: string; ultimo_servidor?: string
+  ficha?: FichaCustodia; tecnicos?: string[] // datos de la cadena de custodia y nombres de los integrantes (se bajan con el plan)
+}
 export interface MuestraLocal {
   id: string; plan_id: string; codigo: string; punto_texto: string; punto_codigo: string | null
   tipo: string | null; matriz: string | null; submatriz: string | null; fecha_planeada: string | null; estado: string
@@ -30,6 +34,15 @@ export interface FotoLocal {
   hora_telefono: string; lat: number | null; lon: number | null; usuario_id: string; sincronizado: number; error_sync?: string
 }
 export interface ConfigLocal { clave: string; valor: number }
+/** Envío de muestras al laboratorio. Los campos coinciden con las columnas del servidor (sin `sincronizado`). */
+export interface EnvioLocal {
+  id: string; plan_id: string; fecha: string // AAAA-MM-DD
+  medio_transporte: string | null; controles: Record<string, boolean>; temperatura_testigo: string | null; observaciones: string | null; entrega: string | null
+  hora_telefono: string; usuario_id: string
+  anulado_en?: string | null // lo anula la oficina; las muestras quedan libres
+  sincronizado: number; error_sync?: string; bajado_en?: string
+}
+export interface EnvioMuestraLocal { envio_id: string; muestra_id: string; sincronizado: number; error_sync?: string; bajado_en?: string }
 
 class BaseLocal extends Dexie {
   planes!: Table<PlanLocal, string>
@@ -40,6 +53,8 @@ class BaseLocal extends Dexie {
   mediciones!: Table<MedicionLocal, string>
   descripciones!: Table<DescripcionLocal, string>
   fotos!: Table<FotoLocal, string>
+  envios!: Table<EnvioLocal, string>
+  envioMuestras!: Table<EnvioMuestraLocal, string>
   meta!: Table<{ clave: string; valor: unknown }, string>
 
   constructor() {
@@ -56,6 +71,10 @@ class BaseLocal extends Dexie {
       descripciones: 'id, muestra_id, sincronizado',
       fotos: 'id, muestra_id, sincronizado',
       meta: 'clave',
+    })
+    this.version(3).stores({
+      envios: 'id, plan_id, sincronizado',
+      envioMuestras: 'muestra_id, envio_id, sincronizado', // una muestra, un solo envío
     })
   }
 }

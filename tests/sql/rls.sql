@@ -111,6 +111,37 @@ select pg_temp.ok((select count(*) from mediciones) = 0, 'A ya no ve el plan');
 select pg_temp.ok((select count(*) from auditoria) = 0, 'comisión no lee auditoría');
 select set_config('request.jwt.claim.sub', :O, false);
 select pg_temp.ok((select count(*) from auditoria) > 0, 'oficina lee auditoría');
+-- envíos: la comisión del plan los crea; una muestra va en un solo envío; solo la oficina los anula
+select set_config('request.jwt.claim.sub', :B, false);
+insert into envios (id, plan_id, fecha, hora_telefono) values ('77777777-7777-7777-7777-777777777771', :'plan', '2026-11-02', now());
+insert into envio_muestras (envio_id, muestra_id) values ('77777777-7777-7777-7777-777777777771', :'muestra');
+insert into envio_muestras (envio_id, muestra_id) values ('77777777-7777-7777-7777-777777777771', :'muestra') on conflict (envio_id, muestra_id) do nothing;
+select pg_temp.ok((select count(*) from envio_muestras) = 1, 'reintentar el mismo envío no duplica');
+select pg_temp.ok((select usuario_id = :B::uuid from envios), 'el servidor sella el usuario del envío');
+insert into envios (id, plan_id, fecha, hora_telefono) values ('77777777-7777-7777-7777-777777777772', :'plan', '2026-11-03', now());
+do $$ begin insert into envio_muestras (envio_id, muestra_id) values ('77777777-7777-7777-7777-777777777772', (select id from muestras limit 1)); raise exception 'debió fallar';
+  exception when unique_violation then null; end $$;
+do $$ begin delete from envios; raise exception 'debió fallar'; exception when insufficient_privilege then null; end $$;
+do $$ begin update envios set fecha = '2020-01-01'; raise exception 'debió fallar'; exception when insufficient_privilege then null; end $$;
+do $$ begin perform anular_envio('77777777-7777-7777-7777-777777777771', 'x'); raise exception 'debió fallar'; exception when others then if sqlerrm like 'debió%' then raise; end if; end $$;
+select pg_temp.ok(integrantes_plan(:'plan') = array['B'], 'integrantes_plan devuelve los nombres del plan');
+select set_config('request.jwt.claim.sub', :C, false);
+do $$ begin insert into envios (id, plan_id, fecha, hora_telefono) values (gen_random_uuid(), (select id from planes limit 1), '2026-11-02', now()); raise exception 'debió fallar';
+  exception when others then if sqlerrm like 'debió%' then raise; end if; end $$;
+select pg_temp.ok((select count(*) from envios) = 0 and (select count(*) from envio_muestras) = 0, 'un tercero no ve los envíos');
+select set_config('request.jwt.claim.sub', :O, false);
+do $$ begin perform anular_envio('77777777-7777-7777-7777-777777777771', '  '); raise exception 'debió fallar'; exception when others then if sqlerrm like 'debió%' then raise; end if; end $$;
+select anular_envio('77777777-7777-7777-7777-777777777771', 'se envió en otro viaje');
+select pg_temp.ok((select count(*) from envio_muestras) = 0 and (select anulado_en is not null from envios where id = '77777777-7777-7777-7777-777777777771'), 'anular libera las muestras y conserva el envío');
+select set_config('request.jwt.claim.sub', :B, false);
+insert into envio_muestras (envio_id, muestra_id) values ('77777777-7777-7777-7777-777777777772', :'muestra');
+select pg_temp.ok((select count(*) from envio_muestras) = 1, 'la muestra liberada puede ir en otro envío');
+-- crear_envio: todo o nada, solo muestras cerradas y del plan propio
+do $$ begin perform crear_envio(jsonb_build_object('id','77777777-7777-7777-7777-777777777773','plan_id',(select id from planes limit 1),'fecha','2026-11-04'), array[(select id from muestras limit 1)]);
+  raise exception 'debió fallar'; exception when unique_violation then null; end $$;
+select pg_temp.ok((select count(*) from envios where id = '77777777-7777-7777-7777-777777777773') = 0, 'si falla una muestra, no queda el envío a medias');
+
+
 -- dos integrantes: la oficina asigna a B (principal) y A (segundo); los dos ven y registran, C no
 select set_config('request.jwt.claim.sub', :O, false);
 select reasignar_plan(:'plan', :B::uuid, :A::uuid);
@@ -121,6 +152,7 @@ select pg_temp.ok((select count(*) from planes where id = :'plan') = 1, 'el segu
 insert into mediciones (id, muestra_id, parametro, valor, hora_telefono) values ('55555555-5555-5555-5555-555555555555', :'muestra', 'Otro', '2', now());
 select pg_temp.ok(tomar_plan(:'plan'), 'el segundo integrante puede volver a tomar el plan');
 select pg_temp.ok((select comision_id = :B::uuid and comision_id_2 = :A::uuid from planes where id = :'plan'), 'tomar_plan no cambia quién es quién');
+select pg_temp.ok(integrantes_plan(:'plan') = array['B','A'], 'integrantes_plan lista a los dos integrantes en orden');
 select set_config('request.jwt.claim.sub', :C, false);
 select pg_temp.ok(not tomar_plan(:'plan'), 'un tercero no puede tomar el plan');
 select pg_temp.ok((select count(*) from mediciones) = 0 and (select count(*) from planes where id = :'plan') = 0, 'un tercero no ve nada');
