@@ -22,25 +22,33 @@ export async function cerrarSiVencida(db: Pick<SupabaseClient, 'auth'>): Promise
 export async function asegurarUsuarioLocal(usuarioId: string, correo?: string | null) {
   const previo = await metaGet<string>('usuario_activo')
   if (previo && previo !== usuarioId) {
-    await local.transaction('rw', [local.planes, local.muestras, local.muestraParametros, local.mediciones, local.descripciones, local.fotos, local.meta], async () => {
+    await local.transaction('rw', [local.planes, local.muestras, local.muestraParametros, local.mediciones, local.descripciones, local.fotos, local.envios, local.envioMuestras, local.meta], async () => {
       await local.mediciones.where('sincronizado').equals(1).delete()
       await local.descripciones.where('sincronizado').equals(1).delete()
       await local.fotos.where('sincronizado').equals(1).delete()
+      await local.envioMuestras.where('sincronizado').equals(1).delete()
+      const conUniones = new Set((await local.envioMuestras.toArray()).map((x) => x.envio_id))
+      await local.envios.filter((e) => e.sincronizado === 1 && !conUniones.has(e.id)).delete()
       const muestrasConPendientes = new Set<string>([
         ...(await local.mediciones.toArray()).map((x) => x.muestra_id),
         ...(await local.descripciones.toArray()).map((x) => x.muestra_id),
         ...(await local.fotos.toArray()).map((x) => x.muestra_id),
         ...(await local.muestras.filter((m) => !!m.estado_pendiente).toArray()).map((m) => m.id),
+        ...(await local.envioMuestras.toArray()).map((x) => x.muestra_id), // lo que queda es pendiente de sincronizar
       ])
       const todasMuestras = await local.muestras.toArray()
       const borrarMuestras = todasMuestras.filter((m) => !muestrasConPendientes.has(m.id)).map((m) => m.id)
       await local.muestraParametros.where('muestra_id').anyOf(borrarMuestras).delete()
       await local.muestras.bulkDelete(borrarMuestras)
-      const planesConPendientes = new Set(todasMuestras.filter((m) => muestrasConPendientes.has(m.id)).map((m) => m.plan_id))
+      const planesConPendientes = new Set([
+        ...todasMuestras.filter((m) => muestrasConPendientes.has(m.id)).map((m) => m.plan_id),
+        ...(await local.envios.toArray()).map((e) => e.plan_id), // envíos sin sincronizar
+      ])
       const borrarPlanes = (await local.planes.toArray()).filter((p) => !planesConPendientes.has(p.id)).map((p) => p.id)
       await local.planes.bulkDelete(borrarPlanes)
       await local.meta.delete('plan_activo')
       await local.meta.delete('rol_usuario')
+      await local.meta.delete('nombre_usuario')
     })
   }
   await metaSet('usuario_activo', usuarioId)

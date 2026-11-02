@@ -9,7 +9,13 @@ export interface FichaCustodia {
   direccion?: string; contacto?: string; telefono?: string; telefono_campo?: string // solo los usa el PDT
 }
 export interface MuestraCustodia { codigo: string; punto: string; tipo: string | null; matriz: Matriz; parametros: string[]; inicio: Date | null; fin: Date | null }
-export interface DatosCustodia { proyecto: string; ficha: FichaCustodia; muestras: MuestraCustodia[]; responsables: string[] }
+/** Datos del envío que salen en el encabezado y el pie de la cadena de custodia. */
+export interface DatosEnvio {
+  fecha: string // AAAA-MM-DD
+  medio_transporte: string | null; controles: Record<string, boolean>; temperatura_testigo: string | null
+  observaciones: string | null; entrega: string | null
+}
+export interface DatosCustodia { proyecto: string; ficha: FichaCustodia; muestras: MuestraCustodia[]; responsables: string[]; envio?: DatosEnvio }
 
 const ALTO = 612
 const MUESTRAS_POR_HOJA = 7
@@ -32,7 +38,7 @@ const fecha = (d: Date) => { const c = enColombia(d); return `${dos(c.getUTCDate
 const hora = (d: Date) => { const c = enColombia(d); return `${dos(c.getUTCHours())}:${dos(c.getUTCMinutes())}` }
 
 /** Arma lo que el formato necesita a partir de los datos del plan; solo parámetros de laboratorio (los in situ no van en la custodia). */
-export function armarCustodia(d: DatosPlan, ficha: FichaCustodia = {}): DatosCustodia {
+export function armarCustodia(d: DatosPlan, ficha: FichaCustodia = {}, extra: { tecnicos?: string[]; envio?: DatosEnvio } = {}): DatosCustodia {
   const muestras = d.muestras.slice().sort((a, b) => a.codigo.localeCompare(b.codigo)).map((m): MuestraCustodia => {
     const horas = d.mediciones.filter((x) => x.muestra_id === m.id).map((x) => Date.parse(x.hora_telefono)).sort((a, b) => a - b)
     return {
@@ -45,7 +51,8 @@ export function armarCustodia(d: DatosPlan, ficha: FichaCustodia = {}): DatosCus
   const quienes = [...new Set(d.mediciones.map((x) => x.usuario_id).filter((u): u is string => !!u))].map((u) => d.usuarios[u] ?? u)
   // «Código del muestreo»: el que la oficina escribió, o el número que lleva el nombre del plan (p. ej. «Muestreo 1128-26»)
   const codigo = ficha.codigo_muestreo?.trim() || d.plan.nombre.match(/\d+-\d{2}/)?.[0] || ''
-  return { proyecto: d.plan.nombre, ficha: { ...ficha, codigo_muestreo: codigo }, muestras, responsables: quienes }
+  // Responsables del muestreo: los integrantes del plan; si no se conocen, quienes registraron mediciones.
+  return { proyecto: d.plan.nombre, ficha: { ...ficha, codigo_muestreo: codigo }, muestras, responsables: extra.tecnicos?.length ? extra.tecnicos : quienes, envio: extra.envio }
 }
 
 export async function llenarCustodia(plantilla: ArrayBuffer | Uint8Array, datos: DatosCustodia): Promise<Uint8Array> {
@@ -101,10 +108,32 @@ export async function llenarCustodia(plantilla: ArrayBuffer | Uint8Array, datos:
       for (const c of new Set(m.parametros.map(columnaDe))) { const i = COLUMNAS.indexOf(c); equis(COL_X[i], COL_X[i + 1], fila + 6.2) }
     })
 
-    // Pie: quién muestreó y entrega. La recepción en laboratorio queda en blanco.
+    // Pie: quién muestreó y quién entrega. La recepción en laboratorio queda en blanco.
     const nombres = datos.responsables.join(', ')
+    const e = datos.envio
     texto(nombres, 83, 436.4, 274)
-    texto(nombres, 70, 458.1, 280)
+    texto(e?.entrega || nombres, 70, 458.1, 280)
+    if (e) {
+      // Verificaciones del encabezado de transporte (se marca «Sí» solo lo que se verificó) y testigo de temperatura
+      const CONTROLES: Record<string, [number, number]> = { nivel: [349.4, 376.2], preservacion: [444.9, 471.7], refrigeracion: [522.9, 549.7], rotulacion: [665.9, 692.7] }
+      for (const [k, [x0, x1]] of Object.entries(CONTROLES)) if (e.controles[k]) texto('Sí', x0, 110.8, x1 - x0, 6, negrita, true)
+      texto(e.temperatura_testigo ?? '', 590.9, 110.8, 26.8, 6, negrita, true)
+      // Medio de transporte: se marca la casilla; cualquier otro texto va en «Otro»
+      const MEDIOS: Record<string, [number, number]> = { terrestre: [98, 132.5], aereo: [152.2, 184.7], acuatico: [217.7, 248.3] }
+      const medio = e.medio_transporte?.trim()
+      if (medio && MEDIOS[medio]) equis(...MEDIOS[medio], 446.6)
+      else if (medio) texto(medio, 275, 447.2, 82)
+      // Observaciones (hasta tres renglones): la fecha del envío y lo que haya escrito la comisión
+      const fechaEnvio = e.fecha.split('-').reverse().join('/')
+      const palabras = limpio(`Envío del ${fechaEnvio}.${e.observaciones ? ` ${e.observaciones}` : ''}`).split(' ')
+      const renglones: string[] = ['']
+      for (const w of palabras) {
+        const actual = renglones[renglones.length - 1]
+        if (actual && normal.widthOfTextAtSize(`${actual} ${w}`, 5.5) > 700) renglones.push(w)
+        else renglones[renglones.length - 1] = actual ? `${actual} ${w}` : w
+      }
+      renglones.slice(0, 3).forEach((r, i) => texto(r, 60, 465.6 + i * 6.4, 705, 5.5))
+    }
   }
   return salida.save()
 }

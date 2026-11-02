@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { local, type MuestraParametroLocal } from './db-local'
+import { bajarEnvios } from './envios'
 import type { FichaCustodia } from '../exportar/custodia-pdf'
 
 export interface PlanDisponible { id: string; nombre: string; comision_id: string | null; comision_id_2?: string | null; tomado_en?: string | null; creado_en: string; ficha?: FichaCustodia }
@@ -47,7 +48,7 @@ const maxServidor = (...listas: { hora_servidor?: string }[][]): string | undefi
 }
 
 /** Descarga el plan completo al teléfono, reemplazando lo anterior de ese plan en una sola transacción. */
-export async function descargarPlan(db: Db, plan: { id: string; nombre: string }, comisionId: string) {
+export async function descargarPlan(db: Db, plan: { id: string; nombre: string; ficha?: FichaCustodia }, comisionId: string) {
   const muestras = await todo<any>((a, b) => db.from('muestras').select('*').eq('plan_id', plan.id).order('codigo').range(a, b))
   const filas = await todo<any>((a, b) =>
     db.from('muestra_parametros').select('id,muestra_id,parametro,es_insitu,muestras!inner(plan_id)').eq('muestras.plan_id', plan.id).order('id').range(a, b))
@@ -60,6 +61,8 @@ export async function descargarPlan(db: Db, plan: { id: string; nombre: string }
   const mediciones = await delPlan('mediciones', COLS_MED)
   const descripciones = await delPlan('descripciones_punto', COLS_DESC)
   const ultimo_servidor = maxServidor(mediciones, descripciones)
+  // Nombres de los integrantes para la cadena de custodia (el teléfono no puede leer los perfiles de otros usuarios)
+  const tecnicos = await db.rpc('integrantes_plan', { p_plan: plan.id }).then((r) => (Array.isArray(r.data) ? (r.data as string[]) : undefined), () => undefined)
 
   await local.transaction('rw', [local.planes, local.muestras, local.muestraParametros, local.parametrosInsitu, local.config, local.mediciones, local.descripciones], async () => {
     const previas = await local.muestras.where('plan_id').equals(plan.id).toArray()
@@ -72,7 +75,8 @@ export async function descargarPlan(db: Db, plan: { id: string; nombre: string }
     const ids = previas.map((m) => m.id)
     await local.muestraParametros.where('muestra_id').anyOf(ids).delete()
     await local.muestras.where('plan_id').equals(plan.id).delete()
-    await local.planes.put({ id: plan.id, nombre: plan.nombre, comision_id: comisionId, descargado_en: new Date().toISOString(), ultimo_servidor })
+    const previo = await local.planes.get(plan.id)
+    await local.planes.put({ id: plan.id, nombre: plan.nombre, comision_id: comisionId, descargado_en: new Date().toISOString(), ultimo_servidor, ficha: plan.ficha ?? previo?.ficha, tecnicos: tecnicos ?? previo?.tecnicos })
     await local.muestras.bulkPut(muestras)
     await local.muestraParametros.bulkPut(parametros)
     await local.parametrosInsitu.clear(); await local.parametrosInsitu.bulkPut(insitu)
@@ -84,6 +88,7 @@ export async function descargarPlan(db: Db, plan: { id: string; nombre: string }
       await (tabla as any).bulkAdd(filas.filter((_, i) => !ya[i]).map(({ muestras: _, hora_servidor: __, ...f }) => ({ ...f, sincronizado: 1, bajado_en })))
     }
   })
+  await bajarEnvios(db, plan.id)
   return muestras.length
 }
 
@@ -123,6 +128,7 @@ export async function bajarNovedadesPlanes(db: Pick<SupabaseClient, 'from'>) {
           }
         }
       })
+      await bajarEnvios(db, p.id)
     } catch {
       // Si falla la descarga opcional (corte de señal o mock parcial en pruebas), no interrumpe la sincronización.
     }

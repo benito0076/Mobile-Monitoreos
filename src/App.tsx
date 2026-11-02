@@ -24,6 +24,7 @@ export function App() {
   const [listo, setListo] = useState(false) // ya se leyó lo que hay en el teléfono
   const [abierta, setAbierta] = useState<string | null>(null)
   const [confirmandoSalir, setConfirmandoSalir] = useState<number | null>(null)
+  const [nombre, setNombre] = useState('') // nombre del perfil: sale como responsable de la entrega en las cadenas de custodia
 
   // Una comisión puede tener varios planes en el teléfono; se trabaja con uno a la vez (el último usado).
   const leerLocal = async () => {
@@ -56,11 +57,13 @@ export function App() {
     if (navigator.onLine) medirDesfase(supabase)
     asegurarUsuarioLocal(sesion.user.id, sesion.user.email).then(async () => {
       const rolGuardado = await metaGet<string>('rol_usuario')
+      setNombre((await metaGet<string>('nombre_usuario')) ?? '')
       if (rolGuardado) setRol(rolGuardado)
       await leerLocal()
-      const { data, error } = await supabase.from('perfiles').select('rol').eq('id', sesion.user.id).single()
+      const { data, error } = await supabase.from('perfiles').select('rol,nombre').eq('id', sesion.user.id).single()
       if (data?.rol) {
         await metaSet('rol_usuario', data.rol)
+        if (data.nombre) { await metaSet('nombre_usuario', data.nombre); setNombre(data.nombre) }
         setRol(data.rol)
       } else if (!error || error.code === 'PGRST116') {
         // El servidor respondió que el usuario no tiene perfil (no fue un corte de red).
@@ -105,7 +108,7 @@ export function App() {
         ? <FormMuestra id={abierta} usuario={sesion.user.id} volver={() => setAbierta(null)} />
         : <>
             <SelectorPlan planes={planes} activo={activoId} cambiar={usar} masPlanes={() => setEligiendo(true)} />
-            <ListaMuestras plan={planLocal} abrir={setAbierta} />
+            <ListaMuestras plan={planLocal} abrir={setAbierta} usuario={{ id: sesion.user.id, nombre: nombre || (nombreUsuario(sesion.user.email ?? '') ?? '') }} />
           </>)}
       {rol === undefined && <p>Cargando perfil…</p>}
       {rol === null && <p>Tu usuario no tiene perfil asignado (o no hay conexión para verificarlo por primera vez). Pide a la oficina que lo cree o conéctate a internet.</p>}
