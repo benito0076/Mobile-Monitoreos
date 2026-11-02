@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../datos/supabase'
 import { Mensaje } from '../Mensaje'
-import { planesVisibles, type PlanDisponible } from '../../datos/planes'
+import { planesVisibles, resumenMuestrasPorPlan, type AvancePlan, type PlanDisponible } from '../../datos/planes'
 import { listarPerfiles, nombreUsuario, type Perfil } from '../../datos/usuarios'
 import { cargarDatosPlan } from '../../datos/exportar-datos'
 import { empaquetarFotosPlan, importarJornada } from '../../datos/emergencia'
@@ -19,6 +19,7 @@ const descargar = (blob: Blob, nombre: string) => {
 
 export function PlanesOficina() {
   const [planes, setPlanes] = useState<PlanDisponible[]>([])
+  const [avances, setAvances] = useState<Record<string, AvancePlan>>({})
   const [comisiones, setComisiones] = useState<Perfil[]>([]) // activas: se pueden asignar
   const [perfiles, setPerfiles] = useState<Perfil[]>([]) // todas, para mostrar quién tiene cada plan aunque ya esté desactivado
   const [destino, setDestino] = useState<Record<string, string>>({})
@@ -26,10 +27,11 @@ export function PlanesOficina() {
   const [estado, setEstado] = useState('')
   const [editando, setEditando] = useState<string | null>(null) // plan cuyos datos de custodia se editan
   const [ficha, setFicha] = useState<FichaCustodia>({})
+  const [confirmacion, setConfirmacion] = useState<{ planId: string; texto: string; ejecutar: () => void } | null>(null)
 
   const cargar = () =>
-    Promise.all([planesVisibles(supabase), listarPerfiles(supabase)])
-      .then(([p, u]) => { setPlanes(p); setPerfiles(u); setComisiones(u.filter((x) => x.rol === 'comision' && x.activo)) })
+    Promise.all([planesVisibles(supabase), listarPerfiles(supabase), resumenMuestrasPorPlan(supabase).catch(() => ({}))])
+      .then(([p, u, av]) => { setPlanes(p); setPerfiles(u); setComisiones(u.filter((x) => x.rol === 'comision' && x.activo)); setAvances(av) })
       .catch((e) => setEstado(e.message))
   useEffect(() => { cargar() }, [])
 
@@ -37,21 +39,29 @@ export function PlanesOficina() {
   const fechaDe = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('es-CO') : '')
 
   async function rpc(fn: 'liberar_plan' | 'reasignar_plan', args: Record<string, string | null>, ok: string) {
+    setConfirmacion(null)
     const { error } = await supabase.rpc(fn, args)
     setEstado(error ? `No se pudo: ${error.message}` : ok)
     cargar()
   }
 
   function liberar(p: PlanDisponible) {
-    if (!confirm(`Liberar «${p.nombre}». Los datos ya enviados se conservan, pero lo que la comisión no haya sincronizado ya no podrá enviarse. Pídele que sincronice antes. ¿Liberar?`)) return
-    rpc('liberar_plan', { p_plan: p.id }, `«${p.nombre}» quedó disponible.`)
+    setConfirmacion({
+      planId: p.id,
+      texto: `Liberar «${p.nombre}». Los datos ya enviados se conservan, pero lo que la comisión no haya sincronizado ya no podrá enviarse. Pídele que sincronice antes. ¿Liberar?`,
+      ejecutar: () => rpc('liberar_plan', { p_plan: p.id }, `«${p.nombre}» quedó disponible.`),
+    })
   }
 
   function reasignar(p: PlanDisponible) {
     const c = comisiones.find((x) => x.id === destino[p.id])
     const c2 = comisiones.find((x) => x.id === destino2[p.id])
-    if (!c || !confirm(`Asignar «${p.nombre}» a ${c.nombre}${c2 ? ` y ${c2.nombre}` : ''}. Los nuevos integrantes verán los datos ya enviados; lo pendiente en los teléfonos de quienes dejan el plan no podrá sincronizarse. ¿Asignar?`)) return
-    rpc('reasignar_plan', { p_plan: p.id, p_comision: c.id, p_comision_2: c2?.id ?? null }, `«${p.nombre}» asignado a ${c.nombre}${c2 ? ` y ${c2.nombre}` : ''}.`)
+    if (!c) return
+    setConfirmacion({
+      planId: p.id,
+      texto: `Asignar «${p.nombre}» a ${c.nombre}${c2 ? ` y ${c2.nombre}` : ''}. Los nuevos integrantes verán los datos ya enviados; lo pendiente en los teléfonos de quienes dejan el plan no podrá sincronizarse. ¿Asignar?`,
+      ejecutar: () => rpc('reasignar_plan', { p_plan: p.id, p_comision: c.id, p_comision_2: c2?.id ?? null }, `«${p.nombre}» asignado a ${c.nombre}${c2 ? ` y ${c2.nombre}` : ''}.`),
+    })
   }
 
   function editarFicha(p: PlanDisponible) { setFicha(p.ficha ?? {}); setEditando(editando === p.id ? null : p.id) }
@@ -101,7 +111,7 @@ export function PlanesOficina() {
     try {
       const datos = await cargarDatosPlan(supabase, p)
       if (!datos.fotos.length) return setEstado(`El plan «${p.nombre}» aún no tiene fotos registradas.`)
-      const { nombre, bytes, cantidad } = await empaquetarFotosPlan(supabase, p.nombre, datos.muestras, datos.fotos)
+      const { nombre, bytes, cantidad } = await empaquetarFotosPlan(supabase, p.nombre, datos.muestras, datos.fotos, (h, t) => setEstado(`Descargando foto ${h} de ${t}…`))
       descargar(new Blob([bytes as BlobPart], { type: 'application/zip' }), nombre)
       setEstado(`${nombre}: ${cantidad} foto${cantidad === 1 ? '' : 's'} descargada${cantidad === 1 ? '' : 's'}.`)
     } catch (e) { setEstado(`No se pudieron descargar las fotos: ${(e as Error).message}`) }
@@ -124,47 +134,69 @@ export function PlanesOficina() {
       <h2>Planes</h2>
       <Mensaje texto={estado} cerrar={() => setEstado('')} />
       <div className="tabla"><table>
-        <thead><tr><th>Plan</th><th>Asignado a</th><th>Acciones</th></tr></thead>
+        <thead><tr><th>Plan</th><th>Avance</th><th>Asignado a</th><th>Acciones</th></tr></thead>
         <tbody>
-          {planes.flatMap((p) => [
-            <tr key={p.id}>
-              <td>{p.nombre}</td>
-              <td>
-                {integrantes(p).length === 0 ? <i>Disponible (sin asignar)</i> : integrantes(p).map((x, i) => (
-                  <div key={i}>{x ? <>{x.nombre} <small>({nombreUsuario(x.correo) ?? 'sin usuario'}){x.activo ? '' : ' · desactivado'}</small></> : <i>Usuario eliminado</i>}</div>
-                ))}
-                {p.tomado_en && integrantes(p).length > 0 && <small>Desde el {fechaDe(p.tomado_en)}</small>}
-              </td>
-              <td><div className="acciones">
-                <button onClick={() => exportar(p)}>Exportar</button>
-                <button className="secundario" onClick={() => bajarFotos(p)}>Fotos (.zip)</button>
-                <button className="secundario" onClick={() => custodia(p)}>Cadena de custodia</button>
-                <button className="secundario" onClick={() => pdt(p)}>PDT</button>
-                <button className="secundario" onClick={() => editarFicha(p)}>Datos del plan</button>
-                {p.comision_id && <button className="secundario" onClick={() => liberar(p)}>Liberar</button>}
-                <select value={destino[p.id] ?? ''} onChange={(e) => setDestino({ ...destino, [p.id]: e.target.value })} aria-label={`Integrante 1 para ${p.nombre}`}>
-                  <option value="">Asignar a…</option>
-                  {comisiones.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
-                <select value={destino2[p.id] ?? ''} onChange={(e) => setDestino2({ ...destino2, [p.id]: e.target.value })} aria-label={`Integrante 2 para ${p.nombre}`}>
-                  <option value="">Segundo integrante (opcional)</option>
-                  {comisiones.filter((c) => c.id !== destino[p.id]).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
-                <button className="secundario" disabled={!destino[p.id]} onClick={() => reasignar(p)}>Asignar</button>
-              </div></td>
-            </tr>,
-            editando === p.id && (
-              <tr key={`${p.id}-ficha`}><td colSpan={3}>
-                <div className="acciones">
-                  {CAMPOS_FICHA.map(([k, etiqueta]) => (
-                    <label key={k}>{etiqueta} <input value={ficha[k] ?? ''} onChange={(e) => setFicha({ ...ficha, [k]: e.target.value })} /></label>
+          {planes.flatMap((p) => {
+            const av = avances[p.id]
+            return [
+              <tr key={p.id}>
+                <td>{p.nombre}</td>
+                <td>
+                  {av ? (
+                    <>
+                      <span className={`estado ${av.cerradas === av.total && av.total > 0 ? 'cerrada' : av.cerradas + av.en_campo > 0 ? 'en_campo' : ''}`}>
+                        {av.cerradas}/{av.total} cerradas
+                      </span>
+                      {av.en_campo > 0 && <><br /><small>{av.en_campo} en campo</small></>}
+                    </>
+                  ) : <small>—</small>}
+                </td>
+                <td>
+                  {integrantes(p).length === 0 ? <i>Disponible (sin asignar)</i> : integrantes(p).map((x, i) => (
+                    <div key={i}>{x ? <>{x.nombre} <small>({nombreUsuario(x.correo) ?? 'sin usuario'}){x.activo ? '' : ' · desactivado'}</small></> : <i>Usuario eliminado</i>}</div>
                   ))}
-                  <button onClick={() => guardarFicha(p)}>Guardar</button> <button className="secundario" onClick={() => setEditando(null)}>Cancelar</button>
-                </div>
-                <small>Sirven para la cadena de custodia y el PDT. El nombre del proyecto es el nombre del plan; si dejas vacío el código del muestreo se toma del nombre del plan (p. ej. 1128-26).</small>
-              </td></tr>
-            ),
-          ])}
+                  {p.tomado_en && integrantes(p).length > 0 && <small>Desde el {fechaDe(p.tomado_en)}</small>}
+                </td>
+                <td><div className="acciones">
+                  <button onClick={() => exportar(p)}>Exportar</button>
+                  <button className="secundario" onClick={() => bajarFotos(p)}>Fotos (.zip)</button>
+                  <button className="secundario" onClick={() => custodia(p)}>Cadena de custodia</button>
+                  <button className="secundario" onClick={() => pdt(p)}>PDT</button>
+                  <button className="secundario" onClick={() => editarFicha(p)}>Datos del plan</button>
+                  {p.comision_id && <button className="secundario" onClick={() => liberar(p)}>Liberar</button>}
+                  <select value={destino[p.id] ?? ''} onChange={(e) => setDestino({ ...destino, [p.id]: e.target.value })} aria-label={`Integrante 1 para ${p.nombre}`}>
+                    <option value="">Asignar a…</option>
+                    {comisiones.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                  <select value={destino2[p.id] ?? ''} onChange={(e) => setDestino2({ ...destino2, [p.id]: e.target.value })} aria-label={`Integrante 2 para ${p.nombre}`}>
+                    <option value="">Segundo integrante (opcional)</option>
+                    {comisiones.filter((c) => c.id !== destino[p.id]).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                  <button className="secundario" disabled={!destino[p.id]} onClick={() => reasignar(p)}>Asignar</button>
+                </div></td>
+              </tr>,
+              confirmacion?.planId === p.id && (
+                <tr key={`${p.id}-confirm`}><td colSpan={4}>
+                  <div role="alert" className="aviso">
+                    <span>{confirmacion.texto}</span>
+                    <button onClick={confirmacion.ejecutar}>Confirmar</button>
+                    <button className="secundario" onClick={() => setConfirmacion(null)}>Cancelar</button>
+                  </div>
+                </td></tr>
+              ),
+              editando === p.id && (
+                <tr key={`${p.id}-ficha`}><td colSpan={4}>
+                  <div className="acciones">
+                    {CAMPOS_FICHA.map(([k, etiqueta]) => (
+                      <label key={k}>{etiqueta} <input value={ficha[k] ?? ''} onChange={(e) => setFicha({ ...ficha, [k]: e.target.value })} /></label>
+                    ))}
+                    <button onClick={() => guardarFicha(p)}>Guardar</button> <button className="secundario" onClick={() => setEditando(null)}>Cancelar</button>
+                  </div>
+                  <small>Sirven para la cadena de custodia y el PDT. El nombre del proyecto es el nombre del plan; si dejas vacío el código del muestreo se toma del nombre del plan (p. ej. 1128-26).</small>
+                </td></tr>
+              ),
+            ]
+          })}
         </tbody>
       </table></div>
 

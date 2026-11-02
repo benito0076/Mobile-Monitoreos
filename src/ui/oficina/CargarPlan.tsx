@@ -14,17 +14,19 @@ export function CargarPlan() {
   const [repetidos, setRepetidos] = useState<Repetido[]>([])
   const [nombreRepetido, setNombreRepetido] = useState(false)
   const [sinComprobar, setSinComprobar] = useState(false)
+  const [confirmandoDuplicado, setConfirmandoDuplicado] = useState(false)
 
   const hallazgos = validarPlan(muestras)
   const hayErrores = hallazgos.some((h) => h.nivel === 'error')
 
   // Avisa si el archivo ya se cargó: mismos códigos de muestra en otro plan, o un plan con el mismo nombre.
   useEffect(() => {
-    setSinComprobar(false)
+    setSinComprobar(false); setConfirmandoDuplicado(false)
     if (!muestras.length) return setRepetidos([])
     buscarRepetidos(supabase, muestras.map((m) => m.codigo)).then(setRepetidos).catch(() => { setRepetidos([]); setSinComprobar(true) })
   }, [muestras])
   useEffect(() => {
+    setConfirmandoDuplicado(false)
     if (!nombre.trim()) return setNombreRepetido(false)
     existePlanConNombre(supabase, nombre).then(setNombreRepetido).catch(() => setNombreRepetido(false))
   }, [nombre])
@@ -44,8 +46,9 @@ export function CargarPlan() {
     }
   }
 
-  async function guardar() {
-    if (duplicado && !confirm('Este plan parece ya estar cargado (ver el aviso de duplicado). Los códigos de muestra repetidos en dos planes confunden la exportación. ¿Guardarlo de todos modos?')) return
+  async function guardar(forzar = false) {
+    if (duplicado && !forzar) return setConfirmandoDuplicado(true)
+    setConfirmandoDuplicado(false)
     setEstado('Guardando…')
     try {
       await guardarPlan(supabase, nombre, archivo, muestras)
@@ -90,7 +93,15 @@ export function CargarPlan() {
               ))}
             </tbody>
           </table></div>
-          <button onClick={guardar} disabled={hayErrores || !nombre.trim()}>Guardar plan</button>
+          {confirmandoDuplicado ? (
+            <div role="alert" className="aviso">
+              <span>Este plan parece ya estar cargado (ver el aviso de duplicado). Los códigos de muestra repetidos en dos planes confunden la exportación. ¿Guardarlo de todos modos?</span>
+              <button onClick={() => guardar(true)}>Guardar de todos modos</button>
+              <button className="secundario" onClick={() => setConfirmandoDuplicado(false)}>Cancelar</button>
+            </div>
+          ) : (
+            <button onClick={() => guardar(false)} disabled={hayErrores || !nombre.trim()}>Guardar plan</button>
+          )}
           {hayErrores && <p className="error">Corrige los errores del archivo antes de guardar.</p>}
         </>
       )}

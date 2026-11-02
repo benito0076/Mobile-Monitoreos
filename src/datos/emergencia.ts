@@ -100,23 +100,29 @@ export async function importarJornada(db: Db, textoJson: string): Promise<Result
   return res
 }
 
-/** Descarga del bucket `fotos` todas las imágenes de un plan y las empaqueta en un archivo ZIP por código de muestra. */
+/** Descarga del bucket `fotos` todas las imágenes de un plan en lotes concurrentes y las empaqueta en un archivo ZIP por código de muestra. */
 export async function empaquetarFotosPlan(
   db: Pick<SupabaseClient, 'storage'>,
   planNombre: string,
   muestras: { id: string; codigo: string }[],
   fotos: { muestra_id: string; ruta_storage: string }[],
+  alProgreso?: (hechas: number, total: number) => void,
 ): Promise<{ nombre: string; bytes: Uint8Array; cantidad: number }> {
   const porMuestra = new Map(muestras.map((m) => [m.id, m.codigo]))
   const archivos: Record<string, Uint8Array> = {}
   let cantidad = 0
-  for (const f of fotos) {
-    const { data, error } = await db.storage.from('fotos').download(f.ruta_storage)
-    if (error || !data) throw new Error(`No se pudo descargar ${f.ruta_storage}: ${error?.message ?? 'archivo vacío'}`)
-    const codigo = (porMuestra.get(f.muestra_id) ?? 'sin-muestra').replace(/[^\w-]+/g, '_')
-    const nombreArchivo = f.ruta_storage.split('/').pop() ?? `${cantidad + 1}.jpg`
-    archivos[`${codigo}/${nombreArchivo}`] = new Uint8Array(await data.arrayBuffer())
-    cantidad++
+  const LOTE = 5
+  for (let i = 0; i < fotos.length; i += LOTE) {
+    const grupo = fotos.slice(i, i + LOTE)
+    await Promise.all(grupo.map(async (f, idx) => {
+      const { data, error } = await db.storage.from('fotos').download(f.ruta_storage)
+      if (error || !data) throw new Error(`No se pudo descargar ${f.ruta_storage}: ${error?.message ?? 'archivo vacío'}`)
+      const codigo = (porMuestra.get(f.muestra_id) ?? 'sin-muestra').replace(/[^\w-]+/g, '_')
+      const nombreArchivo = f.ruta_storage.split('/').pop() ?? `${i + idx + 1}.jpg`
+      archivos[`${codigo}/${nombreArchivo}`] = new Uint8Array(await data.arrayBuffer())
+      cantidad++
+      alProgreso?.(cantidad, fotos.length)
+    }))
   }
   return {
     nombre: `${planNombre.replace(/[^\w-]+/g, '_')}_fotos.zip`,

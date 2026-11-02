@@ -19,7 +19,7 @@ export async function cerrarSiVencida(db: Pick<SupabaseClient, 'auth'>): Promise
  * Si entra otro usuario en el mismo teléfono, limpia los planes y datos ya sincronizados del anterior
  * (conserva únicamente lo que aún esté pendiente de sincronizar para que no se pierda).
  */
-export async function asegurarUsuarioLocal(usuarioId: string) {
+export async function asegurarUsuarioLocal(usuarioId: string, correo?: string | null) {
   const previo = await metaGet<string>('usuario_activo')
   if (previo && previo !== usuarioId) {
     await local.transaction('rw', [local.planes, local.muestras, local.muestraParametros, local.mediciones, local.descripciones, local.fotos, local.meta], async () => {
@@ -40,7 +40,9 @@ export async function asegurarUsuarioLocal(usuarioId: string) {
       const borrarPlanes = (await local.planes.toArray()).filter((p) => !planesConPendientes.has(p.id)).map((p) => p.id)
       await local.planes.bulkDelete(borrarPlanes)
       await local.meta.delete('plan_activo')
+      await local.meta.delete('rol_usuario')
     })
   }
   await metaSet('usuario_activo', usuarioId)
+  if (correo !== undefined) await metaSet('correo_activo', correo?.toLowerCase() ?? null)
 }

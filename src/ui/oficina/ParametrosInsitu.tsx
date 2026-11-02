@@ -25,11 +25,12 @@ export function ParametrosInsitu() {
   const [edicion, setEdicion] = useState<Record<string, BorradorInsitu>>({})
   const [estado, setEstado] = useState('')
   const [aplicando, setAplicando] = useState(false)
+  const [confirmandoQuitar, setConfirmandoQuitar] = useState<string | null>(null)
 
   async function cargar() {
     try {
       const l = await listarInsitu(supabase)
-      setLista(l); setEdicion({})
+      setLista(l); setEdicion({}); setConfirmandoQuitar(null)
       setCandidatos((await nombresParametros(supabase)).map((x) => x.parametro).filter((n) => !l.some((p) => p.nombre === n)))
     } catch (e) { setEstado((e as Error).message) }
   }
@@ -40,8 +41,7 @@ export function ParametrosInsitu() {
     catch (e) { setEstado((e as Error).message) }
   }
   async function quitar(p: ParametroInsitu) {
-    if (!confirm(`¿Quitar «${p.nombre.trim()}» de la lista? Los planes ya cargados lo conservan como in situ hasta que pulses «Aplicar a planes cargados».`)) return
-    try { await quitarInsitu(supabase, p.nombre); setEstado('Parámetro quitado.'); await cargar() } catch (e) { setEstado((e as Error).message) }
+    try { await quitarInsitu(supabase, p.nombre); setConfirmandoQuitar(null); setEstado('Parámetro quitado.'); await cargar() } catch (e) { setEstado((e as Error).message) }
   }
   async function aplicar() {
     setAplicando(true); setEstado('Aplicando la lista a los planes cargados…')
@@ -84,7 +84,14 @@ export function ParametrosInsitu() {
                 <td><input type="checkbox" aria-label={`Obligatorio ${p.nombre}`} checked={b.obligatorio} onChange={(e) => setEdicion({ ...edicion, [p.nombre]: { ...b, obligatorio: e.target.checked } })} /></td>
                 <td><div className="acciones">
                   <button disabled={!cambio} onClick={() => guardar(b, `«${p.nombre.trim()}» actualizado.`)}>Guardar</button>
-                  <button className="secundario" onClick={() => quitar(p)}>Quitar</button>
+                  {confirmandoQuitar === p.nombre ? (
+                    <>
+                      <button onClick={() => quitar(p)}>Confirmar quitar</button>
+                      <button className="secundario" onClick={() => setConfirmandoQuitar(null)}>Cancelar</button>
+                    </>
+                  ) : (
+                    <button className="secundario" onClick={() => setConfirmandoQuitar(p.nombre)}>Quitar</button>
+                  )}
                 </div></td>
               </tr>
             )

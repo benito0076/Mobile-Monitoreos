@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { local } from '../src/datos/db-local'
-import { bajarNovedadesPlanes, tomarPlan } from '../src/datos/planes'
+import { bajarNovedadesPlanes, resumenMuestrasPorPlan, tomarPlan } from '../src/datos/planes'
 
 const PLAN = { id: 'p1', nombre: 'Plan 1' }
 
@@ -100,5 +100,20 @@ describe('elegir plan', () => {
     await tomarPlan(falso(true), PLAN, 'u1'); await tomarPlan(falso(true), PLAN, 'u1')
     expect(await local.muestras.count()).toBe(1)
     expect(await local.muestraParametros.count()).toBe(2)
+  })
+
+  test('resumenMuestrasPorPlan calcula total, en_campo y cerradas por plan', async () => {
+    const db = falso(true, 0, 'p1', {
+      muestras: [
+        { id: '1', plan_id: 'p1', estado: 'cerrada' },
+        { id: '2', plan_id: 'p1', estado: 'en_campo' },
+        { id: '3', plan_id: 'p1', estado: 'pendiente' },
+        { id: '4', plan_id: 'p2', estado: 'cerrada' },
+      ],
+    })
+    expect(await resumenMuestrasPorPlan(db)).toEqual({
+      p1: { total: 3, cerradas: 1, en_campo: 1 },
+      p2: { total: 1, cerradas: 1, en_campo: 0 },
+    })
   })
 })

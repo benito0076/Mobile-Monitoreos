@@ -133,6 +133,18 @@ describe('sincronización', () => {
     expect(s.tablas.mediciones.size).toBe(2)
   })
 
+  test('si una versión es rechazada, omite las correcciones posteriores que dependen de ella sin intentar subirlas', async () => {
+    await guardarMedicion({ ...base, parametro: 'pH', valor: '7' })
+    await corregirMedicion({ ...base, parametro: 'pH', valor: '7.4', motivo: 'lectura' })
+    const s = servidor()
+    s.rechazar = (f) => (f.version === 1 ? 'v1 inválida' : null)
+    const r = await sincronizar(s.db, R)
+    expect(r.errores).toHaveLength(2)
+    expect(r.errores[1]).toMatch(/versión anterior rechazada/)
+    expect(s.tablas.mediciones.size).toBe(0) // v2 no se subió porque depende de v1
+    expect((await pendientes()).mediciones).toBe(2)
+  })
+
   test('foto ya subida en un intento anterior cuenta como confirmada', async () => {
     const f = await guardarFoto('m1', new Blob(['x']), gps, 'u1'); const s = servidor(); s.subidas.add(f.ruta_storage)
     expect((await sincronizar(s.db, R)).errores).toEqual([])

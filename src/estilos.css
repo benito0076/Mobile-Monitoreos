@@ -66,6 +66,10 @@ button.pendiente:hover:not(:disabled) { background: #66e000; border-color: #66e0
 .planes > li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; background: #fff; border: 1px solid var(--borde); border-left: 5px solid var(--lima); border-radius: var(--radio); padding: .7rem .9rem; }
 .planes > li.medicion { display: block; }
 .medicion input { margin: .25rem 0; }
+.fila-captura { display: flex; gap: .5rem; align-items: center; margin: .25rem 0; }
+.fila-captura input { margin: 0; flex: 1; }
+.confirmar-foto { position: absolute; inset: 0; background: rgba(24, 26, 51, .82); border-radius: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: .3rem; padding: .35rem; }
+.confirmar-foto button { min-height: 1.85rem; padding: .2rem .55rem; font-size: .8rem; width: 100%; }
 .tabla { overflow-x: auto; background: #fff; border: 1px solid var(--borde); border-radius: var(--radio); margin: 1rem 0; }
 table { border-collapse: collapse; width: 100%; font-size: .9rem; }
 th { background: var(--azul); color: #fff; text-align: left; padding: .55rem .7rem; white-space: nowrap; }

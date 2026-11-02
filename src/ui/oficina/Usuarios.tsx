@@ -10,6 +10,8 @@ export function Usuarios({ yo }: { yo: string }) {
   const [rol, setRol] = useState<'comision' | 'oficina'>('comision')
   const [estado, setEstado] = useState('')
   const [clave, setClave] = useState<{ usuario: string; clave: string } | null>(null)
+  const [cambiandoId, setCambiandoId] = useState<string | null>(null)
+  const [claveCambio, setClaveCambio] = useState('')
 
   const cargar = () => listarPerfiles(supabase).then(setPerfiles).catch((e) => setEstado(e.message))
   useEffect(() => { cargar() }, [])
@@ -51,18 +53,30 @@ export function Usuarios({ yo }: { yo: string }) {
       <div className="tabla"><table>
         <thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead>
         <tbody>
-          {perfiles.map((p) => (
+          {perfiles.flatMap((p) => [
             <tr key={p.id}>
               <td>{p.nombre}</td><td>{nombreUsuario(p.correo) ?? '—'}</td><td>{p.rol}</td><td>{p.activo ? 'Activo' : 'Desactivado'}</td>
               <td><div className="acciones">
                 {p.id !== yo && <button className="secundario" onClick={() => accion({ accion: 'estado', id: p.id, activo: !p.activo }, () => {})}>{p.activo ? 'Desactivar' : 'Activar'}</button>}
-                <button className="secundario" onClick={() => {
-                  const elegida = prompt(`Nueva contraseña para ${p.nombre} (de 8 a 72 caracteres).\nDéjala vacía para generar una automática.`)
-                  if (elegida !== null) accion({ accion: 'clave', id: p.id, clave: elegida }, (r) => setClave({ usuario: nombreUsuario(p.correo) ?? p.nombre, clave: r.clave }))
-                }}>Nueva contraseña</button>
+                <button className="secundario" onClick={() => { setCambiandoId(cambiandoId === p.id ? null : p.id); setClaveCambio('') }}>Nueva contraseña</button>
               </div></td>
-            </tr>
-          ))}
+            </tr>,
+            cambiandoId === p.id && (
+              <tr key={`${p.id}-clave`}><td colSpan={5}>
+                <form className="acciones" onSubmit={(e) => {
+                  e.preventDefault()
+                  accion({ accion: 'clave', id: p.id, clave: claveCambio }, (r) => {
+                    setClave({ usuario: nombreUsuario(p.correo) ?? p.nombre, clave: r.clave })
+                    setCambiandoId(null); setClaveCambio('')
+                  })
+                }}>
+                  <input value={claveCambio} onChange={(e) => setClaveCambio(e.target.value)} autoComplete="off" placeholder="Opcional (8-72 caract.): vacía = automática" aria-label={`Nueva contraseña para ${p.nombre}`} style={{ maxWidth: '20rem' }} />
+                  <button type="submit">Guardar contraseña</button>
+                  <button type="button" className="secundario" onClick={() => { setCambiandoId(null); setClaveCambio('') }}>Cancelar</button>
+                </form>
+              </td></tr>
+            ),
+          ])}
         </tbody>
       </table></div>
     </section>

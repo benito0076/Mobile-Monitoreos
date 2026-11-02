@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 
-export interface PlanLocal { id: string; nombre: string; comision_id: string; descargado_en: string }
+export interface PlanLocal { id: string; nombre: string; comision_id: string; descargado_en: string; ultimo_servidor?: string }
 export interface MuestraLocal {
   id: string; plan_id: string; codigo: string; punto_texto: string; punto_codigo: string | null
   tipo: string | null; matriz: string | null; submatriz: string | null; fecha_planeada: string | null; estado: string

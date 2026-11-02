@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { liveQuery } from 'dexie'
 import { local, type DescripcionLocal, type FotoLocal, type MedicionLocal, type MuestraLocal, type ParametroInsitu } from '../../datos/db-local'
 import { cambiarEstado, claveMedicion, corregirMedicion, eliminarFotoPendiente, esCompuesta, descripcionVigente, guardarDescripcion, guardarFoto, guardarMedicion, vigentes } from '../../datos/mediciones'
 import { advertenciaGps, advertenciaRango, parsearValor } from '../../datos/validar-medicion'
@@ -11,6 +12,7 @@ type Aviso = { n: number; gps: Gps | null; adv: string[] }
 
 function MiniaturaFoto({ foto, alQuitar }: { foto: FotoLocal; alQuitar?: () => void }) {
   const [url, setUrl] = useState('')
+  const [confirmando, setConfirmando] = useState(false)
   useEffect(() => {
     const u = URL.createObjectURL(foto.blob)
     setUrl(u)
@@ -19,9 +21,16 @@ function MiniaturaFoto({ foto, alQuitar }: { foto: FotoLocal; alQuitar?: () => v
   return (
     <div className="miniatura">
       {url && <img src={url} alt="Foto de la muestra" />}
-      {foto.sincronizado === 0 && alQuitar && (
-        <button type="button" className="secundario quitar-foto" aria-label="Quitar foto" title="Descartar esta foto (aún no sincronizada)" onClick={alQuitar}>×</button>
+      {foto.sincronizado === 0 && alQuitar && !confirmando && (
+        <button type="button" className="secundario quitar-foto" aria-label="Quitar foto" title="Descartar esta foto (aún no sincronizada)" onClick={() => setConfirmando(true)}>×</button>
       )}
+      {confirmando && alQuitar && (
+        <div className="confirmar-foto">
+          <button type="button" onClick={alQuitar}>Borrar</button>
+          <button type="button" className="secundario" onClick={() => setConfirmando(false)}>No</button>
+        </div>
+      )}
+      {foto.error_sync && <small className="error" title={foto.error_sync}>⚠ Error sync</small>}
     </div>
   )
 }
@@ -36,7 +45,7 @@ function FilaMedicion({ muestra, nombre, alicuota, info, actual, usuario, umbral
   const [aviso, setAviso] = useState<Aviso | null>(null)
   const [error, setError] = useState('')
   const unidad = info?.unidad ?? ''
-  const enCurso = useRef(false) // Enter y blur pueden disparar el guardado a la vez
+  const enCurso = useRef(false)
 
   async function guardar(n: number, gps: Gps | null) {
     try {
@@ -70,18 +79,23 @@ function FilaMedicion({ muestra, nombre, alicuota, info, actual, usuario, umbral
           {actual.valor} {actual.unidad} · v{actual.version} · {new Date(actual.hora_telefono).toLocaleTimeString()}
           {actual.precision_m != null && ` · GPS ±${Math.round(actual.precision_m)} m`}
           {gpsDudoso && <small className="error"> · ⚠ {gpsDudoso}</small>}
+          {actual.error_sync && <small className="error"> · ⚠ Rechazada por servidor: {actual.error_sync}</small>}
           {' '}<button onClick={() => setCorrigiendo(true)}>Corregir</button>
         </p>
       )}
       {editando && !aviso && (
         <>
-          <input inputMode="decimal" value={valor} placeholder={corrigiendo ? 'Valor corregido' : 'Valor'} disabled={leyendo}
-            onChange={(e) => setValor(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && intentar()}
-            onBlur={() => !corrigiendo && valor.trim() && intentar()} />
+          <div className="fila-captura">
+            <input inputMode="decimal" value={valor} placeholder={corrigiendo ? 'Valor corregido' : 'Valor'} disabled={leyendo}
+              onChange={(e) => setValor(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && intentar()} />
+            {!corrigiendo && (
+              <button type="button" onClick={intentar} disabled={leyendo || !valor.trim()}>Guardar</button>
+            )}
+          </div>
           {corrigiendo && (
             <>
               <input value={motivo} placeholder="Motivo de la corrección (obligatorio)" onChange={(e) => setMotivo(e.target.value)} />
-              <button onClick={intentar}>Guardar corrección</button> <button onClick={() => { setCorrigiendo(false); setError('') }}>Cancelar</button>
+              <button onClick={intentar} disabled={leyendo}>Guardar corrección</button> <button className="secundario" onClick={() => { setCorrigiendo(false); setError('') }}>Cancelar</button>
             </>
           )}
           {leyendo && <small> Leyendo GPS…</small>}
@@ -91,7 +105,7 @@ function FilaMedicion({ muestra, nombre, alicuota, info, actual, usuario, umbral
         <div role="alert" className="aviso">
           <ul>{aviso.adv.map((a) => <li key={a}>{a}</li>)}</ul>
           <button onClick={() => guardar(aviso.n, aviso.gps)}>Guardar así</button>{' '}
-          <button onClick={() => setAviso(null)}>Cancelar</button>
+          <button className="secundario" onClick={() => setAviso(null)}>Cancelar</button>
         </div>
       )}
       {error && <p role="alert" className="error">{error}</p>}
@@ -112,29 +126,33 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
   const [editDesc, setEditDesc] = useState(false)
   const [msg, setMsg] = useState('')
   const [abiertas, setAbiertas] = useState(1) // alícuotas mostradas (las vacías no se guardan)
+  const [avisosCierre, setAvisosCierre] = useState<string[] | null>(null)
   const descEnCurso = useRef(false)
 
-  const cargar = useCallback(async () => {
-    setMuestra(await local.muestras.get(id))
-    const v = await vigentes(id)
-    setMed(v); setAbiertas((n) => Math.max(n, ...[...v.values()].map((x) => x.alicuota ?? 0))); setDesc(await descripcionVigente(id))
-    setFotos(await local.fotos.where('muestra_id').equals(id).toArray())
-  }, [id])
-
   useEffect(() => {
-    (async () => {
-      setParams((await local.muestraParametros.where('muestra_id').equals(id).filter((p) => p.es_insitu).toArray()).map((p) => p.parametro))
-      setInsitu(new Map((await local.parametrosInsitu.toArray()).map((p) => [p.nombre, p])))
-      setUmbral((await local.config.get('umbral_gps_m'))?.valor ?? UMBRAL_GPS_M)
-      await cambiarEstado(id, 'en_campo')
-      cargar()
-    })()
-  }, [id, cargar])
+    cambiarEstado(id, 'en_campo')
+    const sub = liveQuery(async () => {
+      const [m, ps, cat, cfg, v, d, fs] = await Promise.all([
+        local.muestras.get(id),
+        local.muestraParametros.where('muestra_id').equals(id).filter((p) => p.es_insitu).toArray(),
+        local.parametrosInsitu.toArray(),
+        local.config.get('umbral_gps_m'),
+        vigentes(id),
+        descripcionVigente(id),
+        local.fotos.where('muestra_id').equals(id).toArray(),
+      ])
+      return { m, ps: ps.map((p) => p.parametro), insitu: new Map(cat.map((p) => [p.nombre, p])), umbral: cfg?.valor ?? UMBRAL_GPS_M, v, d, fs }
+    }).subscribe(({ m, ps, insitu, umbral, v, d, fs }) => {
+      setMuestra(m); setParams(ps); setInsitu(insitu); setUmbral(umbral); setMed(v); setDesc(d); setFotos(fs)
+      setAbiertas((n) => Math.max(n, ...[...v.values()].map((x) => x.alicuota ?? 0)))
+    })
+    return () => sub.unsubscribe()
+  }, [id])
 
   async function guardarDesc() {
     if (descEnCurso.current) return
     descEnCurso.current = true
-    try { await guardarDescripcion(id, texto, usuario, editDesc ? motivoDesc : undefined); setEditDesc(false); setTexto(''); setMotivoDesc(''); setMsg(''); cargar() }
+    try { await guardarDescripcion(id, texto, usuario, editDesc ? motivoDesc : undefined); setEditDesc(false); setTexto(''); setMotivoDesc(''); setMsg('') }
     catch (x) { setMsg((x as Error).message) }
     finally { descEnCurso.current = false }
   }
@@ -145,25 +163,27 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
     setMsg('Procesando foto…')
     try {
       const [blob, gps] = await Promise.all([comprimir(f), leerGps(8000)])
-      await guardarFoto(id, blob, gps, usuario); setMsg(''); cargar()
+      await guardarFoto(id, blob, gps, usuario); setMsg('')
     } catch (x) { setMsg(`No se guardó la foto: ${(x as Error).message}`) }
   }
 
   async function quitarFoto(fotoId: string) {
-    if (!confirm('¿Descartar esta foto?')) return
-    try { await eliminarFotoPendiente(fotoId); cargar() }
+    try { await eliminarFotoPendiente(fotoId) }
     catch (x) { setMsg((x as Error).message) }
   }
 
   const maxAlicuotaConDatos = Math.max(1, ...[...med.values()].map((x) => x.alicuota ?? 0))
   const alicuotas: (number | undefined)[] = muestra && esCompuesta(muestra) ? Array.from({ length: abiertas }, (_, i) => i + 1) : [undefined]
 
-  async function cerrar() {
-    const faltan = alicuotas.flatMap((a) => params.filter((p) => insitu.get(p)?.obligatorio && !med.has(claveMedicion(p, a)))
-      .map((p) => `Falta medir: ${p.trim()}${a ? ` (alícuota ${a})` : ''}`))
-    const avisos = [...faltan, ...(desc ? [] : ['Falta la descripción del punto'])]
-    if (avisos.length && !confirm(`${avisos.join('\n')}\n\nUna muestra cerrada no se reabre. ¿Cerrarla así?`)) return
-    await cambiarEstado(id, 'cerrada'); cargar()
+  async function cerrar(forzar = false) {
+    if (!forzar) {
+      const faltan = alicuotas.flatMap((a) => params.filter((p) => insitu.get(p)?.obligatorio && !med.has(claveMedicion(p, a)))
+        .map((p) => `Falta medir: ${p.trim()}${a ? ` (alícuota ${a})` : ''}`))
+      const avisos = [...faltan, ...(desc ? [] : ['Falta la descripción del punto'])]
+      if (avisos.length) return setAvisosCierre(avisos)
+    }
+    setAvisosCierre(null)
+    await cambiarEstado(id, 'cerrada')
   }
 
   if (!muestra) return null
@@ -187,7 +207,7 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
             </h4>
           )}
           <ul className="planes">
-            {params.map((p) => <FilaMedicion key={p} muestra={id} nombre={p} alicuota={a} info={insitu.get(p)} actual={med.get(claveMedicion(p, a))} usuario={usuario} umbral={umbral} alGuardar={cargar} />)}
+            {params.map((p) => <FilaMedicion key={p} muestra={id} nombre={p} alicuota={a} info={insitu.get(p)} actual={med.get(claveMedicion(p, a))} usuario={usuario} umbral={umbral} alGuardar={() => {}} />)}
           </ul>
         </div>
       ))}
@@ -195,12 +215,22 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
 
       <h3>Descripción del punto</h3>
       {desc && !editDesc ? (
-        <p>{desc.texto} <small>(v{desc.version})</small> <button onClick={() => { setEditDesc(true); setTexto(desc.texto) }}>Corregir</button></p>
+        <p>
+          {desc.texto} <small>(v{desc.version})</small>
+          {desc.error_sync && <small className="error"> · ⚠ Rechazada por servidor: {desc.error_sync}</small>}
+          {' '}<button onClick={() => { setEditDesc(true); setTexto(desc.texto) }}>Corregir</button>
+        </p>
       ) : (
         <>
-          <textarea value={texto} rows={3} onChange={(e) => setTexto(e.target.value)} onBlur={() => !editDesc && texto.trim() && guardarDesc()} />
-          {editDesc && (<><input value={motivoDesc} placeholder="Motivo de la corrección (obligatorio)" onChange={(e) => setMotivoDesc(e.target.value)} />
-            <button onClick={guardarDesc}>Guardar corrección</button> <button onClick={() => setEditDesc(false)}>Cancelar</button></>)}
+          <textarea value={texto} rows={3} placeholder="Describe el punto y las condiciones observadas…" onChange={(e) => setTexto(e.target.value)} />
+          {editDesc ? (
+            <>
+              <input value={motivoDesc} placeholder="Motivo de la corrección (obligatorio)" onChange={(e) => setMotivoDesc(e.target.value)} />
+              <button onClick={guardarDesc}>Guardar corrección</button> <button className="secundario" onClick={() => setEditDesc(false)}>Cancelar</button>
+            </>
+          ) : (
+            <button type="button" onClick={guardarDesc} disabled={!texto.trim()}>Guardar descripción</button>
+          )}
         </>
       )}
 
@@ -209,7 +239,16 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
       <div className="fotos">{fotos.map((f) => <MiniaturaFoto key={f.id} foto={f} alQuitar={() => quitarFoto(f.id)} />)}</div>
 
       {msg && <p role="status">{msg}</p>}
-      {!cerrada && <button onClick={cerrar}>Cerrar muestra</button>}
+      {avisosCierre && (
+        <div role="alert" className="aviso">
+          <b>Antes de cerrar la muestra:</b>
+          <ul>{avisosCierre.map((a) => <li key={a}>{a}</li>)}</ul>
+          <span>Una muestra cerrada no se reabre. ¿Cerrarla así?</span>
+          <button onClick={() => cerrar(true)}>Cerrar de todos modos</button>
+          <button className="secundario" onClick={() => setAvisosCierre(null)}>Cancelar</button>
+        </div>
+      )}
+      {!cerrada && !avisosCierre && <button onClick={() => cerrar(false)}>Cerrar muestra</button>}
     </section>
   )
 }

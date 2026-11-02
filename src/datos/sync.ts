@@ -36,20 +36,32 @@ export async function pendientes() {
   return { mediciones, descripciones, fotos, muestras, total: mediciones + descripciones + fotos + muestras }
 }
 
-type Versionado = { id: string; version: number; sincronizado: number; error_sync?: string }
+type Versionado = { id: string; version: number; reemplaza_a?: string | null; sincronizado: number; error_sync?: string }
 const LOCALES = ['sincronizado', 'error_sync', 'bajado_en']
 const limpio = (r: object): Fila => Object.fromEntries(Object.entries(r).filter(([k]) => !LOCALES.includes(k)))
 
 /**
  * Envía los pendientes de una tabla con upsert sobre el UUID (reintentar nunca duplica). Orden por versión:
  * cada corrección llega después de la que reemplaza. Solo se marca sincronizado lo que el servidor confirmó.
+ * Si una versión es rechazada, las correcciones que la reemplazan se omiten en esta corrida para no fallar en cascada.
  */
 async function enviar<T extends Versionado>(db: Db, tabla: string, filas: T[], marcar: (ids: string[]) => Promise<unknown>, fallo: (id: string, msg: string) => Promise<unknown>, o: Required<Opciones>, errores: string[]) {
   let enviados = 0
+  const rechazados = new Set<string>()
   const subir = (lote: T[]) => pedir(() => db.from(tabla).upsert(lote.map(limpio), { onConflict: 'id', ignoreDuplicates: true }), o.esperaMs)
   const porVersion = [...new Set(filas.map((f) => f.version))].sort((a, b) => a - b)
   for (const v of porVersion) {
-    const grupo = filas.filter((f) => f.version === v)
+    const grupo: T[] = []
+    for (const f of filas.filter((x) => x.version === v)) {
+      if (f.reemplaza_a && rechazados.has(f.reemplaza_a)) {
+        rechazados.add(f.id)
+        const msg = 'Pendiente de que se corrija la versión anterior rechazada'
+        await fallo(f.id, msg)
+        errores.push(`${tabla} ${f.id}: ${msg}`)
+      } else {
+        grupo.push(f)
+      }
+    }
     for (let i = 0; i < grupo.length; i += o.lote) {
       const lote = grupo.slice(i, i + o.lote)
       const { error } = await subir(lote)
@@ -58,7 +70,7 @@ async function enviar<T extends Versionado>(db: Db, tabla: string, filas: T[], m
       for (const f of lote) {
         const r = await subir([f])
         if (!r.error) { await marcar([f.id]); enviados++ }
-        else { await fallo(f.id, r.error.message); errores.push(`${tabla} ${f.id}: ${r.error.message}`) }
+        else { rechazados.add(f.id); await fallo(f.id, r.error.message); errores.push(`${tabla} ${f.id}: ${r.error.message}`) }
       }
     }
   }

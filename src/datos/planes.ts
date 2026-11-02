@@ -17,13 +17,34 @@ export async function todo<T>(consulta: (desde: number, hasta: number) => Promis
   }
 }
 
+export interface AvancePlan { total: number; cerradas: number; en_campo: number }
+
 /** Planes libres y el que ya tiene esta comisión (RLS filtra el resto). */
 export function planesVisibles(db: Db) {
   return todo<PlanDisponible>((a, b) => db.from('planes').select('id,nombre,comision_id,comision_id_2,tomado_en,creado_en,ficha').order('creado_en').range(a, b))
 }
 
-const COLS_MED = 'id,muestra_id,parametro,alicuota,valor,unidad,hora_telefono,desfase_reloj_s,lat,lon,precision_m,usuario_id,equipo_id,version_app,version,reemplaza_a,motivo_correccion'
-const COLS_DESC = 'id,muestra_id,texto,hora_telefono,usuario_id,version,reemplaza_a,motivo_correccion'
+/** Resumen de muestras por plan (total, en campo y cerradas) para el panel de oficina. */
+export async function resumenMuestrasPorPlan(db: Pick<SupabaseClient, 'from'>): Promise<Record<string, AvancePlan>> {
+  const filas = await todo<{ plan_id: string; estado: string }>((a, b) => db.from('muestras').select('plan_id,estado').order('id').range(a, b))
+  const res: Record<string, AvancePlan> = {}
+  for (const f of filas) {
+    const a = (res[f.plan_id] ??= { total: 0, cerradas: 0, en_campo: 0 })
+    a.total++
+    if (f.estado === 'cerrada') a.cerradas++
+    else if (f.estado === 'en_campo') a.en_campo++
+  }
+  return res
+}
+
+const COLS_MED = 'id,muestra_id,parametro,alicuota,valor,unidad,hora_telefono,hora_servidor,desfase_reloj_s,lat,lon,precision_m,usuario_id,equipo_id,version_app,version,reemplaza_a,motivo_correccion'
+const COLS_DESC = 'id,muestra_id,texto,hora_telefono,hora_servidor,usuario_id,version,reemplaza_a,motivo_correccion'
+
+const maxServidor = (...listas: { hora_servidor?: string }[][]): string | undefined => {
+  let max: string | undefined
+  for (const l of listas) for (const x of l) if (x.hora_servidor && (!max || x.hora_servidor > max)) max = x.hora_servidor
+  return max
+}
 
 /** Descarga el plan completo al teléfono, reemplazando lo anterior de ese plan en una sola transacción. */
 export async function descargarPlan(db: Db, plan: { id: string; nombre: string }, comisionId: string) {
@@ -38,6 +59,7 @@ export async function descargarPlan(db: Db, plan: { id: string; nombre: string }
     todo<any>((a, b) => db.from(tabla).select(`${cols},muestras!inner(plan_id)`).eq('muestras.plan_id', plan.id).order('id').range(a, b))
   const mediciones = await delPlan('mediciones', COLS_MED)
   const descripciones = await delPlan('descripciones_punto', COLS_DESC)
+  const ultimo_servidor = maxServidor(mediciones, descripciones)
 
   await local.transaction('rw', [local.planes, local.muestras, local.muestraParametros, local.parametrosInsitu, local.config, local.mediciones, local.descripciones], async () => {
     const previas = await local.muestras.where('plan_id').equals(plan.id).toArray()
@@ -50,7 +72,7 @@ export async function descargarPlan(db: Db, plan: { id: string; nombre: string }
     const ids = previas.map((m) => m.id)
     await local.muestraParametros.where('muestra_id').anyOf(ids).delete()
     await local.muestras.where('plan_id').equals(plan.id).delete()
-    await local.planes.put({ id: plan.id, nombre: plan.nombre, comision_id: comisionId, descargado_en: new Date().toISOString() })
+    await local.planes.put({ id: plan.id, nombre: plan.nombre, comision_id: comisionId, descargado_en: new Date().toISOString(), ultimo_servidor })
     await local.muestras.bulkPut(muestras)
     await local.muestraParametros.bulkPut(parametros)
     await local.parametrosInsitu.clear(); await local.parametrosInsitu.bulkPut(insitu)
@@ -59,7 +81,7 @@ export async function descargarPlan(db: Db, plan: { id: string; nombre: string }
     const bajado_en = new Date().toISOString()
     for (const [tabla, filas] of [[local.mediciones, mediciones], [local.descripciones, descripciones]] as const) {
       const ya = await (tabla as any).bulkGet(filas.map((f) => f.id))
-      await (tabla as any).bulkAdd(filas.filter((_, i) => !ya[i]).map(({ muestras: _, ...f }) => ({ ...f, sincronizado: 1, bajado_en })))
+      await (tabla as any).bulkAdd(filas.filter((_, i) => !ya[i]).map(({ muestras: _, hora_servidor: __, ...f }) => ({ ...f, sincronizado: 1, bajado_en })))
     }
   })
   return muestras.length
@@ -67,24 +89,32 @@ export async function descargarPlan(db: Db, plan: { id: string; nombre: string }
 
 /**
  * Trae mediciones, descripciones y estados nuevos del compañero para los planes ya descargados en este teléfono,
- * sin pisar lo que esté pendiente de sincronizar localmente.
+ * sin pisar lo que esté pendiente de sincronizar localmente. Usa `ultimo_servidor` para pedir solo lo nuevo.
  */
 export async function bajarNovedadesPlanes(db: Pick<SupabaseClient, 'from'>) {
   const planes = await local.planes.toArray()
   for (const p of planes) {
     try {
       const delPlan = (tabla: string, cols: string) =>
-        todo<any>((a, b) => db.from(tabla).select(`${cols},muestras!inner(plan_id)`).eq('muestras.plan_id', p.id).order('id').range(a, b))
+        todo<any>((a, b) => {
+          let q: any = db.from(tabla).select(`${cols},muestras!inner(plan_id)`).eq('muestras.plan_id', p.id)
+          if (p.ultimo_servidor && typeof q.gt === 'function') q = q.gt('hora_servidor', p.ultimo_servidor)
+          return q.order('id').range(a, b)
+        })
       const [mediciones, descripciones, muestrasRemotas] = await Promise.all([
         delPlan('mediciones', COLS_MED),
         delPlan('descripciones_punto', COLS_DESC),
         todo<any>((a, b) => db.from('muestras').select('id,estado').eq('plan_id', p.id).order('id').range(a, b)),
       ])
       const bajado_en = new Date().toISOString()
-      await local.transaction('rw', [local.muestras, local.mediciones, local.descripciones], async () => {
+      const nuevoCursor = maxServidor(mediciones, descripciones) ?? p.ultimo_servidor
+      await local.transaction('rw', [local.planes, local.muestras, local.mediciones, local.descripciones], async () => {
+        if (nuevoCursor && nuevoCursor !== p.ultimo_servidor) {
+          await local.planes.update(p.id, { ultimo_servidor: nuevoCursor })
+        }
         for (const [tabla, filas] of [[local.mediciones, mediciones], [local.descripciones, descripciones]] as const) {
           const ya = await (tabla as any).bulkGet(filas.map((f) => f.id))
-          await (tabla as any).bulkAdd(filas.filter((_, i) => !ya[i]).map(({ muestras: _, ...f }) => ({ ...f, sincronizado: 1, bajado_en })))
+          await (tabla as any).bulkAdd(filas.filter((_, i) => !ya[i]).map(({ muestras: _, hora_servidor: __, ...f }) => ({ ...f, sincronizado: 1, bajado_en })))
         }
         for (const mr of muestrasRemotas) {
           const ml = await local.muestras.get(mr.id)
