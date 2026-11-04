@@ -21,7 +21,8 @@ describe('alistamiento: parámetro → grupo de preservación', () => {
     ['Agua - Coliformes Totales NMP', 'MICROBIOLOGICOS'], ['Agua - Coliformes Termotolerantes (Fecales) NMP', 'MICROBIOLOGICOS'],
     ['Agua - Comunidades bentónicas de fondos blandos (macrofauna y meiofauna) Fondos duros (epifauna)', 'BENTOS'], ['Agua - Ictiofauna', 'PECES'],
     ['Agua - Ictioplancton', 'ICTIOPLANCTON'], ['Agua - Perifiton', 'PERIFITON'], ['Agua - Fitoplancton', 'FITOPLANCTON'], ['Agua - Zooplancton', 'ZOOPLANCTON'],
-    ['Agua - Macrófitas Acuáticas', 'MACROFITAS'], ['Agua - Raíces de macrófitas', 'MACROFITAS'], ['Agua - Algo nuevo', 'POR_DEFINIR'],
+    ['Agua - Macrófitas Acuáticas', 'MACROFITAS'], ['Agua - Raíces de macrófitas', 'MACROFITAS'], ['Agua - Sulfuro', 'SULFUROS'], ['Agua - Nitrógeno Orgánico', 'DQO'], ['Agua - Bicarbonatos, Carbonatos e Hidróxidos', 'VARIOS'], ['Agua - Conductividad', 'VARIOS'],
+    ['Agua - Algo nuevo', 'POR_DEFINIR'],
   ])('%s → %s', (nombre, clave) => expect(claveDe(nombre)).toBe(clave))
 
   test('nombres legibles', () => {

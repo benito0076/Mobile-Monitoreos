@@ -72,14 +72,14 @@ const REGLAS: [RegExp, string][] = [
   [/cianuro/, 'CIANURO'], [/\baox\b|halogenos adsorbibles/, 'AOX'], [/formaldeh/, 'FORMALDEHIDO'], [/\bpcbs?\b|bifenil/, 'PCBS'],
   [/plaguicida|pesticida|organoclorad|organofosforad/, 'PESTICIDAS'], [/trihalometano/, 'TRIHALOMETANOS'],
   [/hidrocarburos.*(rango|dro|gro)|\b(dro|gro)\b/, 'HIDROCARBUROS_RANGO'], [/salinidad/, 'SALINIDAD'], [/helminto/, 'HELMINTOS'], [/salmonella/, 'SALMONELLA'],
-  [/dbo/, 'DBO5'], [/dqo|demanda quimica|nitrogeno amoniacal|^amonio|kjeldahl|nitrogeno total|dureza/, 'DQO'],
+  [/dbo/, 'DBO5'], [/dqo|demanda quimica|nitrogeno amoniacal|nitrogeno organico|^amonio|kjeldahl|nitrogeno total|dureza/, 'DQO'],
   [/solidos sedimentables/, 'SS'], [/fosforo reactivo|ortofosfato/, 'ORTOFOSFATOS'], [/fosforo organico/, 'FOSFORO_ORGANICO'], [/fosforo/, 'FOSFORO'],
-  [/aceites y grasas|grasas|hidrocarburos/, 'ACEITES_GRASAS'], [/cromo hexavalente/, 'CROMO_VI'], [/sulfuros/, 'SULFUROS'], [/carbono organico/, 'COT'],
+  [/aceites y grasas|grasas|hidrocarburos/, 'ACEITES_GRASAS'], [/cromo hexavalente/, 'CROMO_VI'], [/sulfuros?\b/, 'SULFUROS'], [/carbono organico/, 'COT'],
   [/coliformes|e\.? ?coli|escherichia/, 'MICROBIOLOGICOS'],
   [/adsorcion de sodio|\bras\b|carbonato de sodio/, 'VARIOS'], // antes de metales: contienen «sodio»
   [new RegExp(`${ELEMENTO}.*disuelt|disuelt.*${ELEMENTO}`), 'METALES_DISUELTOS'],
   [new RegExp(`${ELEMENTO}|\\bicp\\b|llama`), 'METALES'],
-  [/turbi|nitrit|nitrat|color|surfactante|acidez|alcalinidad|solidos|cloruro|sulfato|silice|fluoruro/, 'VARIOS'],
+  [/turbi|nitrit|nitrat|color|surfactante|acidez|alcalinidad|bicarbonato|carbonatos|hidroxidos|conductividad|solidos|cloruro|sulfato|silice|fluoruro/, 'VARIOS'],
 ]
 
 const normalizar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/^\s*agua\s*-\s*/, '').replace(/\s+/g, ' ').trim()
