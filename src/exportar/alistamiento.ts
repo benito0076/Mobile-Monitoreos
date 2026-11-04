@@ -72,14 +72,14 @@ const REGLAS: [RegExp, string][] = [
   [/cianuro/, 'CIANURO'], [/\baox\b|halogenos adsorbibles/, 'AOX'], [/formaldeh/, 'FORMALDEHIDO'], [/\bpcbs?\b|bifenil/, 'PCBS'],
   [/plaguicida|pesticida|organoclorad|organofosforad/, 'PESTICIDAS'], [/trihalometano/, 'TRIHALOMETANOS'],
   [/hidrocarburos.*(rango|dro|gro)|\b(dro|gro)\b/, 'HIDROCARBUROS_RANGO'], [/salinidad/, 'SALINIDAD'], [/helminto/, 'HELMINTOS'], [/salmonella/, 'SALMONELLA'],
-  [/dbo/, 'DBO5'], [/dqo|demanda quimica|nitrogeno amoniacal|^amonio|kjeldahl|nitrogeno total|dureza/, 'DQO'],
+  [/dbo/, 'DBO5'], [/dqo|demanda quimica|nitrogeno amoniacal|nitrogeno organico|^amonio|kjeldahl|nitrogeno total|dureza/, 'DQO'],
   [/solidos sedimentables/, 'SS'], [/fosforo reactivo|ortofosfato/, 'ORTOFOSFATOS'], [/fosforo organico/, 'FOSFORO_ORGANICO'], [/fosforo/, 'FOSFORO'],
-  [/aceites y grasas|grasas|hidrocarburos/, 'ACEITES_GRASAS'], [/cromo hexavalente/, 'CROMO_VI'], [/sulfuros/, 'SULFUROS'], [/carbono organico/, 'COT'],
+  [/aceites y grasas|grasas|hidrocarburos/, 'ACEITES_GRASAS'], [/cromo hexavalente/, 'CROMO_VI'], [/sulfuros?\b/, 'SULFUROS'], [/carbono organico/, 'COT'],
   [/coliformes|e\.? ?coli|escherichia/, 'MICROBIOLOGICOS'],
   [/adsorcion de sodio|\bras\b|carbonato de sodio/, 'VARIOS'], // antes de metales: contienen «sodio»
   [new RegExp(`${ELEMENTO}.*disuelt|disuelt.*${ELEMENTO}`), 'METALES_DISUELTOS'],
   [new RegExp(`${ELEMENTO}|\\bicp\\b|llama`), 'METALES'],
-  [/turbi|nitrit|nitrat|color|surfactante|acidez|alcalinidad|solidos|cloruro|sulfato|silice|fluoruro/, 'VARIOS'],
+  [/turbi|nitrit|nitrat|color|surfactante|acidez|alcalinidad|bicarbonato|carbonatos|hidroxidos|conductividad|solidos|cloruro|sulfato|silice|fluoruro/, 'VARIOS'],
 ]
 
 const normalizar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/^\s*agua\s*-\s*/, '').replace(/\s+/g, ' ').trim()
@@ -115,4 +115,55 @@ export function agruparParametros(parametros: string[]): { fisicoquimicos: FilaP
     fisicoquimicos: filas.filter((f) => f.bloque === 'fisicoquimico').map(quitar),
     hidrobiologicos: filas.filter((f) => f.bloque === 'hidrobiologico').map(quitar),
   }
+}
+
+// ---- Sólidos: suelo, sedimento y lodo ----
+// Salen de las tablas de preservación del propio laboratorio (hojas de suelo y de sedimento/lodo del PDT). Cantidades en gramos.
+// Los parámetros subcontratados quedan «por definir» a propósito: cambian seguido de laboratorio.
+// ponytail: valores de Hoja3/Hoja6 y Hoja5 sin cruzar contra el AT; pH/conductividad y metales difieren de mínimo entre hojas (no se muestra el mínimo de análisis, solo lo que se trae).
+const AMBIENTE = 'Temperatura ambiente, entregar lo antes posible'
+export const GRUPOS_SOLIDO: Record<string, Grupo> = {
+  SUELO_GENERAL: fq('SUELO · GENERAL', '300-500 g', AMBIENTE, 'Bolsa ziploc', 'Máximo 30 días'),
+  SUELO_DENSIDAD_APARENTE: fq('SUELO · DENSIDAD APARENTE', 'Anillos de 5x5 cm', AMBIENTE, 'Anillos de 5x5 cm', 'Muestra inalterada, recubierta con papel vinipel · Máximo 30 días'),
+  GYA_SUELO: fq('SUELO · ACEITES Y GRASAS / HIDROCARBUROS', '100 g', AMBIENTE, 'Frasco de vidrio boca ancha', 'Máximo 30 días'),
+  MICRO_SUELO: fq('SUELO · MICROBIOLÓGICOS', '100 g', 'Refrigerar a < 10 °C', 'Frasco de vidrio boca ancha estéril', 'Analizar lo antes posible · Máximo 24 h'),
+  GYA_SEDIMENTO: fq('SEDIMENTO Y LODO · ACEITES Y GRASAS / HIDROCARBUROS', 'Por definir', 'Refrigerar a 4 ± 2 °C', 'Vidrio con tapa forrada de PTFE', 'Máximo 28 días'),
+  MICRO_SEDIMENTO: fq('SEDIMENTO Y LODO · MICROBIOLÓGICOS', 'Por definir', 'Refrigerar a 2-5 °C', 'Vidrio estéril', 'Máximo 6 h'),
+  AGUA_PORO: fq('SEDIMENTO · AGUA DE PORO', 'Mínimo 5 kg', 'Refrigerar a 4 ± 2 °C', 'Bolsas ziploc', 'Máximo 8 días'),
+}
+export type TipoSolido = 'suelo' | 'sedimento' | 'lodo'
+
+/** «SUELO» / «Sedimento» / «Lodo» en la matriz o submatriz de la muestra; null = agua u otra (va por las reglas de agua). */
+export function tipoSolido(matriz: string | null, submatriz: string | null): TipoSolido | null {
+  const n = normalizar(`${matriz ?? ''} ${submatriz ?? ''}`)
+  return /sediment/.test(n) ? 'sedimento' : /\blodo/.test(n) ? 'lodo' : /suelo/.test(n) ? 'suelo' : null
+}
+
+// Metales propios (los subcontratados —As, Se, Li, Be, Sn, Ca, B, Co— no van aquí y quedan «por definir»).
+const METALES_PROPIOS = ['aluminio', 'antimonio', 'bario', 'cadmio', 'cobre', 'cromo', 'hierro', 'magnesio', 'manganeso', 'mercurio', 'niquel', 'plata', 'plomo', 'potasio', 'sodio', 'vanadio', 'zinc']
+const COLIFORMES = /coliformes|e\.? ?coli|escherichia/
+const REGLAS_SUELO: [RegExp, string][] = [
+  [/bases cambiables|acidez intercambiable|aluminio intercambiable|hidrogeno intercambiable/, 'POR_DEFINIR'], // sin fila en la tabla; que no caigan en «sodio» o «aluminio»
+  [/densidad aparente/, 'SUELO_DENSIDAD_APARENTE'],
+  [/aceites|grasas|hidrocarburos/, 'GYA_SUELO'],
+  [COLIFORMES, 'MICRO_SUELO'],
+  [/capacidad de intercambio|\bcic\b|^ph\b|conductividad|humedad|metales pesados|sodio intercambiable|\bpsi\b|adsorcion de sodio|\bras\b|densidad real|porosidad|textura/, 'SUELO_GENERAL'],
+  [new RegExp(`\\b(${METALES_PROPIOS.join('|')})\\b`), 'SUELO_GENERAL'],
+]
+const REGLAS_SEDIMENTO: [RegExp, string][] = [[/agua de poro/, 'AGUA_PORO'], [/aceites|grasas|hidrocarburos/, 'GYA_SEDIMENTO'], [COLIFORMES, 'MICRO_SEDIMENTO']]
+const PREFIJO_SOLIDO = /^\s*(suelo|sedimento|lodo)s?\s*-\s*/i
+
+/** Como agruparParametros, para parámetros de suelo, sedimento o lodo: una fila por grupo; lo que no tiene fila queda «por definir». */
+export function agruparSolidos(items: { parametro: string; tipo: TipoSolido }[]): FilaPdt[] {
+  const porClave = new Map<string, Set<string>>()
+  for (const { parametro, tipo } of items) {
+    const n = normalizar(parametro).replace(PREFIJO_SOLIDO, '')
+    const k = (tipo === 'suelo' ? REGLAS_SUELO : REGLAS_SEDIMENTO).find(([r]) => r.test(n))?.[1] ?? 'POR_DEFINIR'
+    if (!porClave.has(k)) porClave.set(k, new Set())
+    porClave.get(k)!.add(nombreCorto(parametro).replace(PREFIJO_SOLIDO, ''))
+  }
+  return [...Object.keys(GRUPOS_SOLIDO), 'POR_DEFINIR'].filter((k) => porClave.has(k)).map((k) => {
+    const { bloque: _, ...g } = k === 'POR_DEFINIR' ? GRUPOS.POR_DEFINIR : GRUPOS_SOLIDO[k]
+    return { ...g, parametros: [...porClave.get(k)!].sort((a, b) => a.localeCompare(b, 'es')) }
+  })
 }

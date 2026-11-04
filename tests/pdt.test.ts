@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { strFromU8, unzipSync } from 'fflate'
 import { describe, expect, test } from 'vitest'
-import { agruparParametros, claveDe, nombreCorto } from '../src/exportar/alistamiento'
+import { agruparParametros, agruparSolidos, claveDe, nombreCorto, tipoSolido } from '../src/exportar/alistamiento'
 import { armarPdt, llenarPdt } from '../src/exportar/pdt'
 import type { DatosPlan } from '../src/exportar/exportador'
 
@@ -21,7 +21,8 @@ describe('alistamiento: parámetro → grupo de preservación', () => {
     ['Agua - Coliformes Totales NMP', 'MICROBIOLOGICOS'], ['Agua - Coliformes Termotolerantes (Fecales) NMP', 'MICROBIOLOGICOS'],
     ['Agua - Comunidades bentónicas de fondos blandos (macrofauna y meiofauna) Fondos duros (epifauna)', 'BENTOS'], ['Agua - Ictiofauna', 'PECES'],
     ['Agua - Ictioplancton', 'ICTIOPLANCTON'], ['Agua - Perifiton', 'PERIFITON'], ['Agua - Fitoplancton', 'FITOPLANCTON'], ['Agua - Zooplancton', 'ZOOPLANCTON'],
-    ['Agua - Macrófitas Acuáticas', 'MACROFITAS'], ['Agua - Raíces de macrófitas', 'MACROFITAS'], ['Agua - Algo nuevo', 'POR_DEFINIR'],
+    ['Agua - Macrófitas Acuáticas', 'MACROFITAS'], ['Agua - Raíces de macrófitas', 'MACROFITAS'], ['Agua - Sulfuro', 'SULFUROS'], ['Agua - Nitrógeno Orgánico', 'DQO'], ['Agua - Bicarbonatos, Carbonatos e Hidróxidos', 'VARIOS'], ['Agua - Conductividad', 'VARIOS'],
+    ['Agua - Algo nuevo', 'POR_DEFINIR'],
   ])('%s → %s', (nombre, clave) => expect(claveDe(nombre)).toBe(clave))
 
   test('nombres legibles', () => {
@@ -34,6 +35,33 @@ describe('alistamiento: parámetro → grupo de preservación', () => {
     expect(r.fisicoquimicos.map((f) => [f.grupo, f.parametros])).toEqual([['METALES', ['Cromo', 'Zinc']], ['VARIOS', ['Acidez']]])
     expect(r.hidrobiologicos.map((f) => f.grupo)).toEqual(['PERIFITON', 'MACRÓFITAS'])
     expect(r.hidrobiologicos[1]).toMatchObject({ material: 'Prensa', observaciones: 'Se trae bajo prensa si aplica' })
+  })
+})
+
+describe('alistamiento: suelo, sedimento y lodo', () => {
+  test('la matriz decide si es sólido; agua sigue por sus reglas', () => {
+    expect([tipoSolido('SUELO', ''), tipoSolido('Sedimento', 'Sedimento continental'), tipoSolido('LODO', ''), tipoSolido('AGUA', 'Agua Superficial'), tipoSolido(null, null)]).toEqual(['suelo', 'sedimento', 'lodo', null, null])
+  })
+
+  test('suelo: grupos del laboratorio en gramos; subcontratados y sin fila quedan por definir', () => {
+    const r = agruparSolidos(['Suelo - pH', 'Suelo - Conductividad Eléctrica', 'Suelo - Humedad', 'Suelo - Plomo', 'Suelo - Cadmio', 'Suelo - PSI (Porcentaje de sodio intercambiable)',
+      'Suelo - Textura', 'Suelo - Densidad aparente', 'Suelo - Densidad real', 'Suelo - Grasas y aceites', 'Suelo - Coliformes Totales', 'Suelo - Fluoruros', 'Suelo - Arsénico', 'Suelo - Bases cambiables [Sodio]', 'Suelo - Aluminio intercambiable']
+      .map((parametro) => ({ parametro, tipo: 'suelo' as const })))
+    const por = Object.fromEntries(r.map((f) => [f.grupo, f]))
+    expect(por['SUELO · GENERAL']).toMatchObject({ minimo: '300-500 g', material: 'Bolsa ziploc', observaciones: 'Máximo 30 días',
+      parametros: ['Cadmio', 'Conductividad Eléctrica', 'Densidad real', 'Humedad', 'pH', 'Plomo', 'PSI (Porcentaje de sodio intercambiable)', 'Textura'] })
+    expect(por['SUELO · DENSIDAD APARENTE'].parametros).toEqual(['Densidad aparente'])
+    expect(por['SUELO · ACEITES Y GRASAS / HIDROCARBUROS']).toMatchObject({ minimo: '100 g', material: 'Frasco de vidrio boca ancha' })
+    expect(por['SUELO · MICROBIOLÓGICOS']).toMatchObject({ preservante: 'Refrigerar a < 10 °C', observaciones: 'Analizar lo antes posible · Máximo 24 h' })
+    expect(por['POR DEFINIR'].parametros).toEqual(['Aluminio intercambiable', 'Arsénico', 'Bases cambiables [Sodio]', 'Fluoruros'])
+    expect(JSON.stringify(r)).not.toMatch(/HNO3|H2SO4/) // nada de preservas de agua en sólidos
+  })
+
+  test('sedimento y lodo: tabla de almacenamiento; agua de poro aparte', () => {
+    const r = agruparSolidos([{ parametro: 'Sedimento - Aceites y Grasas', tipo: 'sedimento' }, { parametro: 'Lodo - Hidrocarburos', tipo: 'lodo' },
+      { parametro: 'Sedimento - Nitrógeno amoniacal en agua de poro', tipo: 'sedimento' }, { parametro: 'Sedimento - Plomo', tipo: 'sedimento' }])
+    expect(r.map((f) => [f.grupo, f.parametros])).toEqual([['SEDIMENTO Y LODO · ACEITES Y GRASAS / HIDROCARBUROS', ['Aceites y Grasas', 'Hidrocarburos']],
+      ['SEDIMENTO · AGUA DE PORO', ['Nitrógeno amoniacal en agua de poro']], ['POR DEFINIR', ['Plomo']]])
   })
 })
 
@@ -86,4 +114,18 @@ describe('PDT (FM-081)', () => {
     const vacio = llenarPdt(readFileSync('public/fm-081.xlsx'), armarPdt({ ...d, muestras: [], parametros: [] }))
     expect(strFromU8(unzipSync(vacio)['xl/worksheets/sheet1.xml'])).toContain('<row r="1"')
   })
+})
+
+test('un plan con agua y suelo: cada parámetro sigue la matriz de su muestra', () => {
+  const base = { punto_texto: 'P1', tipo: 'Puntual', submatriz: '', estado: 'cerrada' }
+  const d: DatosPlan = {
+    plan: { nombre: 'Muestreo 2000-26' },
+    muestras: [{ id: 'a', codigo: '20001-26', matriz: 'AGUA', ...base }, { id: 's', codigo: '20002-26', matriz: 'SUELO', ...base }],
+    parametros: [{ muestra_id: 'a', parametro: 'Agua - Plomo ICP', es_insitu: false }, { muestra_id: 's', parametro: 'Suelo - Plomo', es_insitu: false }, { muestra_id: 's', parametro: 'Suelo - Humedad', es_insitu: false }],
+    mediciones: [], descripciones: [], fotos: [], usuarios: {},
+  }
+  const r = armarPdt(d).fisicoquimicos
+  expect(r.map((f) => [f.grupo, f.preservante, f.parametros])).toEqual([['METALES', 'Acidificar a pH < 2 con HNO3', ['Plomo']], ['SUELO · GENERAL', 'Temperatura ambiente, entregar lo antes posible', ['Humedad', 'Plomo']]])
+  const xml = strFromU8(unzipSync(llenarPdt(readFileSync('public/fm-081.xlsx'), armarPdt(d)))['xl/worksheets/sheet1.xml'])
+  expect(xml).toContain('Bolsa ziploc')
 })
