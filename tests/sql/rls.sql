@@ -159,6 +159,16 @@ select pg_temp.ok((select count(*) from mediciones) = 0 and (select count(*) fro
 select set_config('request.jwt.claim.sub', :O, false);
 select liberar_plan(:'plan');
 select pg_temp.ok((select comision_id is null and comision_id_2 is null from planes where id = :'plan'), 'liberar quita a los dos integrantes');
+-- errores del cliente: cualquiera inserta el suyo, solo la oficina los lee, nadie los edita
+select set_config('request.jwt.claim.sub', :A, false);
+insert into errores_cliente (mensaje, version_app) values ('boom', '0.1.0');
+select pg_temp.ok((select usuario_id = :A::uuid from errores_cliente), 'el error queda a nombre de quien lo reporta (A lo ve)');
+do $$ begin insert into errores_cliente (mensaje, usuario_id) values ('x', '00000000-0000-0000-0000-00000000000b'); raise exception 'debió fallar'; exception when insufficient_privilege or check_violation then null; end $$;
+do $$ begin update errores_cliente set mensaje = 'y'; raise exception 'debió fallar'; exception when insufficient_privilege then null; end $$;
+select set_config('request.jwt.claim.sub', :C, false);
+select pg_temp.ok((select count(*) from errores_cliente) = 0, 'un técnico no lee errores ajenos');
+select set_config('request.jwt.claim.sub', :O, false);
+select pg_temp.ok((select count(*) from errores_cliente) = 1, 'la oficina lee los errores');
 -- anon no tiene acceso a nada
 select set_config('request.jwt.claim.sub', '', false);
 reset role; set role anon;

@@ -5,8 +5,12 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE
   auth: { persistSession: false },
 })
 
+// Sin ALLOWED_ORIGIN la función no arranca: preferimos fallar al desplegar que quedar abiertos a cualquier sitio.
+const ORIGEN = Deno.env.get('ALLOWED_ORIGIN')
+if (!ORIGEN || ORIGEN === '*') throw new Error('Falta ALLOWED_ORIGIN (p. ej. https://app.tudominio.com)')
+
 const CORS = {
-  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
+  'Access-Control-Allow-Origin': ORIGEN,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
