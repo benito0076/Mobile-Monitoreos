@@ -69,7 +69,7 @@ export function PanelEnvios({ fuente }: { fuente: FuenteEnvios }) {
   }
 
   return (
-    <div className="tarjeta ancha">
+    <div className="tarjeta ancha envios">
       <h3>Envíos al laboratorio</h3>
       {candidatas.length === 0
         ? <p>No hay muestras cerradas pendientes de enviar.</p>
