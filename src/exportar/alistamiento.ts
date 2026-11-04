@@ -75,7 +75,7 @@ const REGLAS: [RegExp, string][] = [
   [/dbo/, 'DBO5'], [/dqo|demanda quimica|nitrogeno amoniacal|nitrogeno organico|^amonio|kjeldahl|nitrogeno total|dureza/, 'DQO'],
   [/solidos sedimentables/, 'SS'], [/fosforo reactivo|ortofosfato/, 'ORTOFOSFATOS'], [/fosforo organico/, 'FOSFORO_ORGANICO'], [/fosforo/, 'FOSFORO'],
   [/aceites y grasas|grasas|hidrocarburos/, 'ACEITES_GRASAS'], [/cromo hexavalente/, 'CROMO_VI'], [/sulfuros?\b/, 'SULFUROS'], [/carbono organico/, 'COT'],
-  [/coliformes|e\.? ?coli|escherichia/, 'MICROBIOLOGICOS'],
+  [/coliformes|e[.\- ]?coli|escherichia/, 'MICROBIOLOGICOS'],
   [/adsorcion de sodio|\bras\b|carbonato de sodio/, 'VARIOS'], // antes de metales: contienen «sodio»
   [new RegExp(`${ELEMENTO}.*disuelt|disuelt.*${ELEMENTO}`), 'METALES_DISUELTOS'],
   [new RegExp(`${ELEMENTO}|\\bicp\\b|llama`), 'METALES'],
@@ -99,7 +99,8 @@ export function nombreCorto(parametro: string): string {
 }
 
 /** Agrupa los parámetros por grupo de preservación; una fila del PDT por grupo, en el orden de GRUPOS. */
-export function agruparParametros(parametros: string[]): { fisicoquimicos: FilaPdt[]; hidrobiologicos: FilaPdt[] } {
+export const TIOSULFATO = 'Refrigerar a < 10 °C · Agua potable: 5 gotas de tiosulfato de sodio al 3%' // neutraliza el cloro del agua potable
+export function agruparParametros(parametros: string[], potable = false): { fisicoquimicos: FilaPdt[]; hidrobiologicos: FilaPdt[] } {
   const porClave = new Map<string, Set<string>>()
   for (const p of parametros) {
     const k = claveDe(p)
@@ -108,7 +109,7 @@ export function agruparParametros(parametros: string[]): { fisicoquimicos: FilaP
   }
   const filas = Object.keys(GRUPOS).filter((k) => porClave.has(k)).map((k): FilaPdt & { bloque: Bloque } => {
     const { bloque, ...g } = GRUPOS[k]
-    return { bloque, ...g, parametros: [...porClave.get(k)!].sort((a, b) => a.localeCompare(b, 'es')) }
+    return { bloque, ...g, ...(potable && k === 'MICROBIOLOGICOS' && { preservante: TIOSULFATO }), parametros: [...porClave.get(k)!].sort((a, b) => a.localeCompare(b, 'es')) }
   })
   const quitar = ({ bloque: _, ...f }: FilaPdt & { bloque: Bloque }): FilaPdt => f
   return {

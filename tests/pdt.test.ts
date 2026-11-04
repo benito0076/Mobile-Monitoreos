@@ -22,6 +22,7 @@ describe('alistamiento: parámetro → grupo de preservación', () => {
     ['Agua - Comunidades bentónicas de fondos blandos (macrofauna y meiofauna) Fondos duros (epifauna)', 'BENTOS'], ['Agua - Ictiofauna', 'PECES'],
     ['Agua - Ictioplancton', 'ICTIOPLANCTON'], ['Agua - Perifiton', 'PERIFITON'], ['Agua - Fitoplancton', 'FITOPLANCTON'], ['Agua - Zooplancton', 'ZOOPLANCTON'],
     ['Agua - Macrófitas Acuáticas', 'MACROFITAS'], ['Agua - Raíces de macrófitas', 'MACROFITAS'], ['Agua - Sulfuro', 'SULFUROS'], ['Agua - Nitrógeno Orgánico', 'DQO'], ['Agua - Bicarbonatos, Carbonatos e Hidróxidos', 'VARIOS'], ['Agua - Conductividad', 'VARIOS'],
+    ['Agua - E-Coli UFC (POTABLES)', 'MICROBIOLOGICOS'], ['Agua - E Coli NMP', 'MICROBIOLOGICOS'], ['Agua - Escherichia coli', 'MICROBIOLOGICOS'],
     ['Agua - Algo nuevo', 'POR_DEFINIR'],
   ])('%s → %s', (nombre, clave) => expect(claveDe(nombre)).toBe(clave))
 
@@ -178,5 +179,29 @@ describe('PDT: unidad de la muestra y prueba de infiltración', () => {
     const d = armarPdt(plan([['s', 'Suelo - Prueba de infiltración', false], ['s', 'Suelo - Humedad', false]]))
     expect(d.insitu).toEqual(['Prueba de infiltración'])
     expect(d.fisicoquimicos.flatMap((f) => f.parametros)).toEqual(['Humedad'])
+  })
+})
+
+describe('PDT: agua potable', () => {
+  const base = { punto_texto: 'Grifo', tipo: 'Puntual', estado: 'cerrada' }
+  const plan = (submatriz: string): DatosPlan => ({
+    plan: { nombre: 'Muestreo 4000-26' }, muestras: [{ id: 'a', codigo: '40001-26', matriz: 'AGUA', submatriz, ...base }],
+    parametros: [{ muestra_id: 'a', parametro: 'Agua - Coliformes Totales UFC (POTABLES)', es_insitu: false }, { muestra_id: 'a', parametro: 'Agua - E-Coli UFC (POTABLES)', es_insitu: false },
+      { muestra_id: 'a', parametro: 'Cloro Residual Libre In Situ', es_insitu: true }, { muestra_id: 'a', parametro: 'Agua - Acidez', es_insitu: false }],
+    mediciones: [], descripciones: [], fotos: [], usuarios: {},
+  })
+  const micro = (d: DatosPlan) => armarPdt(d).fisicoquimicos.find((f) => f.grupo === 'MICROBIOLOGICOS')!
+
+  test('con una muestra potable, la microbiología lleva tiosulfato; E-Coli va con los coliformes', () => {
+    expect(micro(plan('Agua Potable'))).toMatchObject({ preservante: 'Refrigerar a < 10 °C · Agua potable: 5 gotas de tiosulfato de sodio al 3%', parametros: ['Coliformes Totales UFC', 'E-Coli UFC'] })
+  })
+
+  test('sin agua potable, la microbiología queda como estaba; el resto del agua no cambia', () => {
+    expect(micro(plan('Agua Residual no Doméstica')).preservante).toBe('N/A')
+    expect(armarPdt(plan('Agua Potable')).fisicoquimicos.find((f) => f.grupo === 'VARIOS')).toMatchObject({ preservante: 'N/A', parametros: ['Acidez'] })
+  })
+
+  test('el cloro residual libre va en los parámetros in situ', () => {
+    expect(armarPdt(plan('Agua Potable')).insitu).toEqual(['Cloro Residual Libre In Situ'])
   })
 })

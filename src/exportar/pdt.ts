@@ -30,7 +30,8 @@ export function armarPdt(d: DatosPlan, ficha: FichaCustodia = {}, tecnicos: stri
   // La prueba de infiltración es in situ aunque la app no la registre (no está entre los parámetros in situ del servidor).
   const esInsitu = (p: { parametro: string; es_insitu: boolean }) => p.es_insitu || /infiltracion/.test(norm(p.parametro))
   const labo = d.parametros.filter((p) => !esInsitu(p))
-  const agua = agruparParametros(unicos(labo.filter((p) => !tipoDe.get(p.muestra_id)).map((p) => p.parametro)))
+  const potable = muestras.some((m) => /potable/.test(norm(`${m.matriz} ${m.submatriz}`))) // con una sola muestra potable, la microbiología lleva tiosulfato
+  const agua = agruparParametros(unicos(labo.filter((p) => !tipoDe.get(p.muestra_id)).map((p) => p.parametro)), potable)
   const solidos = agruparSolidos(labo.flatMap((p) => { const tipo = tipoDe.get(p.muestra_id); return tipo ? [{ parametro: p.parametro, tipo }] : [] }))
   const fisicoquimicos = [...agua.fisicoquimicos, ...solidos]
   const { hidrobiologicos } = agua

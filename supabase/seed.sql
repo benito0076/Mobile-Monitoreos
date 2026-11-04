@@ -15,3 +15,8 @@ insert into parametros_insitu (nombre, unidad, minimo, maximo, obligatorio) valu
   ('Agua - Caudal Compuesto', '', null, null, false),
   ('Agua - Sólidos Sedimentables - Compuesto', '', null, null, false)
 on conflict do nothing;
+
+-- Agua potable (Muestreo 1217-26): nombre exacto del plan; rango 0 a 5 mg/L, obligatorio.
+insert into parametros_insitu (nombre, unidad, minimo, maximo, obligatorio) values
+  ('Cloro Residual Libre In Situ', 'mg/L', 0, 5, true)
+on conflict do nothing;
