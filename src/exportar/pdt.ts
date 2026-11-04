@@ -2,7 +2,7 @@
 // La plantilla (public/fm-081.xlsx, ver scripts/preparar-plantilla-pdt.py) trae las filas modelo de cada bloque;
 // aquí se repiten tantas veces como haga falta y se reescriben las celdas combinadas y los saltos de página.
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import { agruparParametros, nombreCorto, type FilaPdt } from './alistamiento'
+import { agruparParametros, agruparSolidos, nombreCorto, tipoSolido, type FilaPdt } from './alistamiento'
 import { filaTipo } from './custodia-mapa'
 import type { FichaCustodia } from './custodia-pdf'
 import type { DatosPlan } from './exportador'
@@ -23,7 +23,13 @@ export function armarPdt(d: DatosPlan, ficha: FichaCustodia = {}, tecnicos: stri
   const tipos = new Set(muestras.map((m) => filaTipo(m.tipo)))
   const hay = (re: RegExp) => muestras.some((m) => re.test(norm(m.matriz)))
   const unicos = (xs: string[]) => [...new Set(xs)]
-  const { fisicoquimicos, hidrobiologicos } = agruparParametros(unicos(d.parametros.filter((p) => !p.es_insitu).map((p) => p.parametro)))
+  // Cada parámetro sigue la matriz de su muestra: suelo, sedimento y lodo van por sus reglas; todo lo demás, por las de agua.
+  const tipoDe = new Map(muestras.map((m) => [m.id, tipoSolido(m.matriz, m.submatriz)]))
+  const labo = d.parametros.filter((p) => !p.es_insitu)
+  const agua = agruparParametros(unicos(labo.filter((p) => !tipoDe.get(p.muestra_id)).map((p) => p.parametro)))
+  const solidos = agruparSolidos(labo.flatMap((p) => { const tipo = tipoDe.get(p.muestra_id); return tipo ? [{ parametro: p.parametro, tipo }] : [] }))
+  const fisicoquimicos = [...agua.fisicoquimicos, ...solidos]
+  const { hidrobiologicos } = agua
   const partes = [fisicoquimicos.length && 'físico-química', hidrobiologicos.length && 'hidrobiológica'].filter(Boolean)
   const codigo = ficha.codigo_muestreo?.trim() || d.plan.nombre.match(/\d+-\d{2}/)?.[0] || ''
   return {
