@@ -15,7 +15,8 @@ Pruebas: `npm test` (lógica, lectura del Excel, cola de sincronización) y `npm
 ## Base de datos y funciones
 
 - Migraciones en `supabase/migrations/` (aplicar en orden), datos iniciales en `supabase/seed.sql`.
-- Función `supabase/functions/gestionar-usuarios` (crea usuarios, los activa/desactiva y restablece contraseñas; usa la clave `service_role` solo en el servidor). Desplegar con `supabase functions deploy gestionar-usuarios`.
+- Función `supabase/functions/gestionar-usuarios` (crea usuarios, los activa/desactiva y restablece contraseñas; usa la clave `service_role` solo en el servidor). Desplegar con `supabase secrets set ALLOWED_ORIGIN=https://tu-dominio` (obligatorio: sin él la función no arranca) y `supabase functions deploy gestionar-usuarios`.
+- Errores del cliente: la app guarda en `errores_cliente` (migración 0015) los errores no controlados; la oficina los consulta con `select * from errores_cliente order by creado_en desc` en el editor SQL.
 
 ## Primera cuenta de oficina
 
