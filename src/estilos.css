@@ -104,6 +104,13 @@ code { background: #eceefb; padding: .1rem .4rem; border-radius: 4px; font-size:
 .selector-plan label { flex: 1 1 14rem; }
 .tarjeta.ancha { max-width: none; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); align-items: end; margin-bottom: 1rem; }
 .tarjeta.ancha > b, .tarjeta.ancha > select { grid-column: 1 / -1; }
+/* Envíos: la lista, los controles y el botón ocupan todo el ancho; los campos sueltos siguen en rejilla. */
+.tarjeta.envios > h3, .tarjeta.envios > ul, .tarjeta.envios > fieldset, .tarjeta.envios > button, .tarjeta.envios > p { grid-column: 1 / -1; }
+.tarjeta.envios h3 { margin: 0; }
+.tarjeta.envios fieldset { display: grid; gap: .5rem; margin: 0; min-width: 0; }
+.tarjeta.envios label:has(> input[type=checkbox]) { display: flex; align-items: center; gap: .5rem; }
+.tarjeta.envios .planes label b { white-space: nowrap; }
+.tarjeta.envios input[type=checkbox] { width: 1.3rem; min-height: 1.3rem; padding: 0; flex: none; }
 .casilla { display: flex; align-items: center; gap: .5rem; font-weight: 400; color: var(--tinta); }
 .casilla input, td input[type=checkbox] { width: 1.3rem; min-height: 1.3rem; padding: 0; }
 td input:not([type=checkbox]) { min-width: 5.5rem; min-height: 2.25rem; padding: .3rem .5rem; }
