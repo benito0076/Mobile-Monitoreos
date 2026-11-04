@@ -205,3 +205,25 @@ describe('PDT: agua potable', () => {
     expect(armarPdt(plan('Agua Potable')).insitu).toEqual(['Cloro Residual Libre In Situ'])
   })
 })
+
+describe('alistamiento: dureza en el frasco de Metales o de DQO', () => {
+  const filas = (ps: string[]) => agruparParametros(ps).fisicoquimicos.map((f) => [f.grupo, f.parametros])
+  const dureza = ['Agua - Dureza Total', 'Agua - Dureza Cálcica']
+
+  test('con metales y sin otros parámetros DQO: la dureza va con los metales y no hay fila DQO', () => {
+    expect(filas(['Agua - Cromo ICP', ...dureza])).toEqual([['METALES', ['Cromo', 'Dureza Cálcica', 'Dureza Total']]])
+  })
+
+  test('con otros parámetros DQO y sin metales: la dureza va en DQO y no se abre fila de metales', () => {
+    expect(filas(['Agua - DQO RB', ...dureza])).toEqual([['DQO', ['DQO', 'Dureza Cálcica', 'Dureza Total']]])
+  })
+
+  test('con metales y con otros parámetros DQO: la dureza se queda en DQO, como hasta ahora', () => {
+    expect(filas(['Agua - Cromo ICP', 'Agua - DQO RB', ...dureza])).toEqual([['METALES', ['Cromo']], ['DQO', ['DQO', 'Dureza Cálcica', 'Dureza Total']]])
+  })
+
+  test('sola, o con metales disueltos (filtrados), la dureza va en DQO', () => {
+    expect(filas(dureza)).toEqual([['DQO', ['Dureza Cálcica', 'Dureza Total']]])
+    expect(filas(['Agua - Cadmio disuelto', ...dureza])).toEqual([['METALES DISUELTOS', ['Cadmio disuelto']], ['DQO', ['Dureza Cálcica', 'Dureza Total']]])
+  })
+})

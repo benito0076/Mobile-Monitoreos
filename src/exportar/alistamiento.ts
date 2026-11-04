@@ -102,10 +102,19 @@ export function nombreCorto(parametro: string): string {
 export const TIOSULFATO = 'Refrigerar a < 10 °C · Agua potable: 5 gotas de tiosulfato de sodio al 3%' // neutraliza el cloro del agua potable
 export function agruparParametros(parametros: string[], potable = false): { fisicoquimicos: FilaPdt[]; hidrobiologicos: FilaPdt[] } {
   const porClave = new Map<string, Set<string>>()
+  const dureza = new Set<string>() // dureza total y cálcica salen del frasco DQO o del de Metales; se decide abajo para no abrir un frasco de más
   for (const p of parametros) {
     const k = claveDe(p)
+    if (k === 'DQO' && /dureza/.test(normalizar(p))) { dureza.add(nombreCorto(p)); continue }
     if (!porClave.has(k)) porClave.set(k, new Set())
     porClave.get(k)!.add(nombreCorto(p))
+  }
+  // Con metales totales y sin otros parámetros del grupo DQO, la dureza va con los metales (sin fila DQO); en cualquier otro caso, en DQO.
+  // La dureza nunca abre una fila de Metales por sí sola. Los metales disueltos (filtrados) no cuentan.
+  if (dureza.size) {
+    const destino = porClave.has('METALES') && !porClave.has('DQO') ? 'METALES' : 'DQO'
+    if (!porClave.has(destino)) porClave.set(destino, new Set())
+    for (const d of dureza) porClave.get(destino)!.add(d)
   }
   const filas = Object.keys(GRUPOS).filter((k) => porClave.has(k)).map((k): FilaPdt & { bloque: Bloque } => {
     const { bloque, ...g } = GRUPOS[k]
