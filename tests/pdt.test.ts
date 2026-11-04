@@ -53,19 +53,30 @@ describe('alistamiento: suelo, sedimento y lodo', () => {
     expect(por['SUELO · DENSIDAD APARENTE'].parametros).toEqual(['Densidad aparente'])
     expect(por['SUELO · ACEITES Y GRASAS / HIDROCARBUROS']).toMatchObject({ minimo: '100 g', preservante: 'Refrigerar a 4 ± 2 °C', material: 'Frasco de vidrio boca ancha' })
     expect(por['SUELO · MICROBIOLÓGICOS']).toMatchObject({ preservante: 'Refrigerar a < 10 °C', observaciones: 'Analizar lo antes posible · Máximo 24 h' })
-    expect(por['POR DEFINIR'].parametros).toEqual(['Aluminio intercambiable', 'Arsénico', 'Bases cambiables [Sodio]', 'Fluoruros'])
+    expect(por['POR DEFINIR'].parametros).toEqual(['Arsénico', 'Fluoruros'])
+    expect(por['SUELO · SODIO CAMBIABLE'].parametros).toEqual(['Bases cambiables [Sodio]'])
+    expect(por['SUELO · ACIDEZ, ALUMINIO E HIDRÓGENO INTERCAMBIABLES'].parametros).toEqual(['Aluminio intercambiable'])
     expect(JSON.stringify(r)).not.toMatch(/HNO3|H2SO4/) // nada de preservas de agua en sólidos
   })
 
-  test('suelo: intercambiables (Ca, Mg, K) y fósforo/nitrógeno total ya no quedan por definir', () => {
-    const r = agruparSolidos(['Suelo - Calcio intercambiable', 'Suelo - Bases cambiables [Magnesio]', 'Suelo - Potasio Intercambiable', 'Suelo - Fósforo total', 'Suelo - Nitrógeno Total',
-      'Suelo - Bases cambiables [Sodio]', 'Suelo - Aluminio intercambiable'].map((parametro) => ({ parametro, tipo: 'suelo' as const })))
+  test('suelo: intercambiables (Ca, Mg, K) y fósforo/nitrógeno total', () => {
+    const r = agruparSolidos(['Suelo - Calcio intercambiable', 'Suelo - Bases cambiables [Magnesio]', 'Suelo - Potasio Intercambiable', 'Suelo - Fósforo total', 'Suelo - Nitrógeno Total'].map((parametro) => ({ parametro, tipo: 'suelo' as const })))
     expect(r.map((f) => [f.grupo, f.minimo, f.material, f.parametros])).toEqual([
       ['SUELO · CALCIO INTERCAMBIABLE', '100 g', 'Frasco de vidrio', ['Calcio intercambiable']],
       ['SUELO · MAGNESIO INTERCAMBIABLE', '100 g', 'Frasco de vidrio', ['Bases cambiables [Magnesio]']],
       ['SUELO · POTASIO INTERCAMBIABLE', '100 g', 'Frasco de vidrio', ['Potasio Intercambiable']],
       ['SUELO · FÓSFORO Y NITRÓGENO TOTAL', '2000 g', 'Bolsa hermética', ['Fósforo total', 'Nitrógeno Total']],
-      ['POR DEFINIR', 'Por definir', 'Por definir', ['Aluminio intercambiable', 'Bases cambiables [Sodio]']],
+    ])
+  })
+
+  test('suelo: sodio cambiable y acidez/Al/H intercambiables; el PSI y «bases cambiables» sin elemento no se confunden', () => {
+    const r = agruparSolidos(['Suelo - Bases cambiables [Sodio]', 'Suelo - Acidez intercambiable', 'Suelo - Aluminio Intercambiable', 'Suelo - Hidrógeno intercambiable',
+      'Suelo - Porcentaje de sodio intercambiable', 'Suelo - Bases cambiables'].map((parametro) => ({ parametro, tipo: 'suelo' as const })))
+    expect(r.map((f) => [f.grupo, f.minimo, f.parametros])).toEqual([
+      ['SUELO · GENERAL', '300-500 g', ['Porcentaje de sodio intercambiable']],
+      ['SUELO · SODIO CAMBIABLE', '100 g', ['Bases cambiables [Sodio]']],
+      ['SUELO · ACIDEZ, ALUMINIO E HIDRÓGENO INTERCAMBIABLES', '100 g', ['Acidez intercambiable', 'Aluminio Intercambiable', 'Hidrógeno intercambiable']],
+      ['POR DEFINIR', 'Por definir', ['Bases cambiables']],
     ])
   })
 

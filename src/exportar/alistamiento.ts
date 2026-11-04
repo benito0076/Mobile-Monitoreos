@@ -132,6 +132,9 @@ export const GRUPOS_SOLIDO: Record<string, Grupo> = {
   SUELO_CA_INTERCAMBIABLE: fq('SUELO · CALCIO INTERCAMBIABLE', '100 g', 'Refrigerar a < 10 °C', 'Frasco de vidrio', 'Refrigerar a < 10 °C'),
   SUELO_MG_INTERCAMBIABLE: fq('SUELO · MAGNESIO INTERCAMBIABLE', '100 g', 'Refrigerar a < 10 °C', 'Frasco de vidrio', 'Refrigerar a < 10 °C'),
   SUELO_K_INTERCAMBIABLE: fq('SUELO · POTASIO INTERCAMBIABLE', '100 g', 'Refrigerar a < 10 °C', 'Frasco de vidrio', 'Refrigerar a < 10 °C'),
+  // Recomendación acordada (sin PDT real que lo muestre): sodio como las otras bases; acidez, Al e H salen de la misma extracción con KCl, un solo recipiente.
+  SUELO_NA_CAMBIABLE: fq('SUELO · SODIO CAMBIABLE', '100 g', 'Refrigerar a < 10 °C', 'Frasco de vidrio', 'Refrigerar a < 10 °C'),
+  SUELO_ACIDEZ_INTERCAMBIABLE: fq('SUELO · ACIDEZ, ALUMINIO E HIDRÓGENO INTERCAMBIABLES', '100 g', 'Refrigerar a < 10 °C', 'Frasco de vidrio o bolsa hermética', 'Refrigerar a < 10 °C · Un solo recipiente para los tres'),
   SUELO_FOSFORO_NITROGENO: fq('SUELO · FÓSFORO Y NITRÓGENO TOTAL', '2000 g', 'Temperatura ambiente', 'Bolsa hermética', 'Entregar lo antes posible'),
   GYA_SEDIMENTO: fq('SEDIMENTO Y LODO · ACEITES Y GRASAS / HIDROCARBUROS', 'Por definir', REFRIGERADO, 'Vidrio con tapa forrada de PTFE', 'Máximo 28 días'),
   MICRO_SEDIMENTO: fq('SEDIMENTO Y LODO · MICROBIOLÓGICOS', 'Por definir', 'Refrigerar a 2-5 °C', 'Vidrio estéril', 'Máximo 6 h'),
@@ -150,8 +153,10 @@ const METALES_PROPIOS = ['aluminio', 'antimonio', 'bario', 'cadmio', 'cobre', 'c
 const COLIFORMES = /coliformes|e\.? ?coli|escherichia/
 const REGLAS_SUELO: [RegExp, string][] = [
   [/(calcio|magnesio|potasio).*(cambiable|intercambiable)|(cambiable|intercambiable).*(calcio|magnesio|potasio)/, 'INTERCAMBIABLE'], // se reparte por elemento más abajo
+  [/bases (inter)?cambiables.*sodio|sodio cambiable/, 'SUELO_NA_CAMBIABLE'], // «sodio intercambiable» a secas es el PSI y va en el grupo general
+  [/(acidez|aluminio|hidrogeno) (inter)?cambiable/, 'SUELO_ACIDEZ_INTERCAMBIABLE'],
   [/fosforo total|nitrogeno total/, 'SUELO_FOSFORO_NITROGENO'],
-  [/bases cambiables|acidez intercambiable|aluminio intercambiable|hidrogeno intercambiable/, 'POR_DEFINIR'], // sin fila en la tabla; que no caigan en «sodio» o «aluminio»
+  [/bases (inter)?cambiables/, 'POR_DEFINIR'], // «bases cambiables» sin elemento: no cae en «sodio» ni en los metales
   [/densidad aparente/, 'SUELO_DENSIDAD_APARENTE'],
   [/aceites|grasas|hidrocarburos/, 'GYA_SUELO'],
   [COLIFORMES, 'MICRO_SUELO'],
