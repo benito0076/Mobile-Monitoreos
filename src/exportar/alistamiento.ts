@@ -128,6 +128,11 @@ export const GRUPOS_SOLIDO: Record<string, Grupo> = {
   SUELO_DENSIDAD_APARENTE: fq('SUELO · DENSIDAD APARENTE', 'Anillos de 5x5 cm', AMBIENTE, 'Anillos de 5x5 cm', 'Muestra inalterada, recubierta con papel vinipel · Máximo 30 días'),
   GYA_SUELO: fq('SUELO · ACEITES Y GRASAS / HIDROCARBUROS', '100 g', REFRIGERADO, 'Frasco de vidrio boca ancha', 'Máximo 30 días'),
   MICRO_SUELO: fq('SUELO · MICROBIOLÓGICOS', '100 g', 'Refrigerar a < 10 °C', 'Frasco de vidrio boca ancha estéril', 'Analizar lo antes posible · Máximo 24 h'),
+  // Del PDT real de suelos (ECOPETROL, pozos sépticos): cada base intercambiable va en su propio frasco.
+  SUELO_CA_INTERCAMBIABLE: fq('SUELO · CALCIO INTERCAMBIABLE', '100 g', 'Refrigerar a < 10 °C', 'Frasco de vidrio', 'Refrigerar a < 10 °C'),
+  SUELO_MG_INTERCAMBIABLE: fq('SUELO · MAGNESIO INTERCAMBIABLE', '100 g', 'Refrigerar a < 10 °C', 'Frasco de vidrio', 'Refrigerar a < 10 °C'),
+  SUELO_K_INTERCAMBIABLE: fq('SUELO · POTASIO INTERCAMBIABLE', '100 g', 'Refrigerar a < 10 °C', 'Frasco de vidrio', 'Refrigerar a < 10 °C'),
+  SUELO_FOSFORO_NITROGENO: fq('SUELO · FÓSFORO Y NITRÓGENO TOTAL', '2000 g', 'Temperatura ambiente', 'Bolsa hermética', 'Entregar lo antes posible'),
   GYA_SEDIMENTO: fq('SEDIMENTO Y LODO · ACEITES Y GRASAS / HIDROCARBUROS', 'Por definir', REFRIGERADO, 'Vidrio con tapa forrada de PTFE', 'Máximo 28 días'),
   MICRO_SEDIMENTO: fq('SEDIMENTO Y LODO · MICROBIOLÓGICOS', 'Por definir', 'Refrigerar a 2-5 °C', 'Vidrio estéril', 'Máximo 6 h'),
   AGUA_PORO: fq('SEDIMENTO · AGUA DE PORO', 'Mínimo 5 kg', 'Refrigerar a 4 ± 2 °C', 'Bolsas ziploc', 'Máximo 8 días'),
@@ -144,6 +149,8 @@ export function tipoSolido(matriz: string | null, submatriz: string | null): Tip
 const METALES_PROPIOS = ['aluminio', 'antimonio', 'bario', 'cadmio', 'cobre', 'cromo', 'hierro', 'magnesio', 'manganeso', 'mercurio', 'niquel', 'plata', 'plomo', 'potasio', 'sodio', 'vanadio', 'zinc']
 const COLIFORMES = /coliformes|e\.? ?coli|escherichia/
 const REGLAS_SUELO: [RegExp, string][] = [
+  [/(calcio|magnesio|potasio).*(cambiable|intercambiable)|(cambiable|intercambiable).*(calcio|magnesio|potasio)/, 'INTERCAMBIABLE'], // se reparte por elemento más abajo
+  [/fosforo total|nitrogeno total/, 'SUELO_FOSFORO_NITROGENO'],
   [/bases cambiables|acidez intercambiable|aluminio intercambiable|hidrogeno intercambiable/, 'POR_DEFINIR'], // sin fila en la tabla; que no caigan en «sodio» o «aluminio»
   [/densidad aparente/, 'SUELO_DENSIDAD_APARENTE'],
   [/aceites|grasas|hidrocarburos/, 'GYA_SUELO'],
@@ -152,14 +159,15 @@ const REGLAS_SUELO: [RegExp, string][] = [
   [new RegExp(`\\b(${METALES_PROPIOS.join('|')})\\b`), 'SUELO_GENERAL'],
 ]
 const REGLAS_SEDIMENTO: [RegExp, string][] = [[/agua de poro/, 'AGUA_PORO'], [/aceites|grasas|hidrocarburos/, 'GYA_SEDIMENTO'], [COLIFORMES, 'MICRO_SEDIMENTO']]
-const PREFIJO_SOLIDO = /^\s*(suelo|sedimento|lodo)s?\s*-\s*/i
+export const PREFIJO_SOLIDO = /^\s*(suelo|sedimento|lodo)s?\s*-\s*/i
 
 /** Como agruparParametros, para parámetros de suelo, sedimento o lodo: una fila por grupo; lo que no tiene fila queda «por definir». */
 export function agruparSolidos(items: { parametro: string; tipo: TipoSolido }[]): FilaPdt[] {
   const porClave = new Map<string, Set<string>>()
   for (const { parametro, tipo } of items) {
     const n = normalizar(parametro).replace(PREFIJO_SOLIDO, '')
-    const k = (tipo === 'suelo' ? REGLAS_SUELO : REGLAS_SEDIMENTO).find(([r]) => r.test(n))?.[1] ?? 'POR_DEFINIR'
+    let k = (tipo === 'suelo' ? REGLAS_SUELO : REGLAS_SEDIMENTO).find(([r]) => r.test(n))?.[1] ?? 'POR_DEFINIR'
+    if (k === 'INTERCAMBIABLE') k = n.includes('calcio') ? 'SUELO_CA_INTERCAMBIABLE' : n.includes('magnesio') ? 'SUELO_MG_INTERCAMBIABLE' : 'SUELO_K_INTERCAMBIABLE'
     if (!porClave.has(k)) porClave.set(k, new Set())
     porClave.get(k)!.add(nombreCorto(parametro).replace(PREFIJO_SOLIDO, ''))
   }
