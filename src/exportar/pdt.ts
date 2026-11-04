@@ -2,7 +2,7 @@
 // La plantilla (public/fm-081.xlsx, ver scripts/preparar-plantilla-pdt.py) trae las filas modelo de cada bloque;
 // aquí se repiten tantas veces como haga falta y se reescriben las celdas combinadas y los saltos de página.
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import { agruparParametros, agruparSolidos, nombreCorto, tipoSolido, type FilaPdt } from './alistamiento'
+import { agruparParametros, agruparSolidos, nombreCorto, PREFIJO_SOLIDO, tipoSolido, type FilaPdt } from './alistamiento'
 import { filaTipo } from './custodia-mapa'
 import type { FichaCustodia } from './custodia-pdf'
 import type { DatosPlan } from './exportador'
@@ -13,6 +13,8 @@ export interface DatosPdt {
   tipos: { puntual: boolean; compuesto: boolean; integrado: boolean }
   objetivo: string; puntos: string[]
   fisicoquimicos: FilaPdt[]; hidrobiologicos: FilaPdt[]; insitu: string[]
+  /** Unidad del tamaño mínimo cuando hay sólidos: 'g' (solo sólidos) o 'mL / g' (mezcla). Sin definir = agua, la plantilla queda como está. */
+  unidadMuestra?: string
 }
 
 const norm = (s: string | null) => (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -25,11 +27,14 @@ export function armarPdt(d: DatosPlan, ficha: FichaCustodia = {}, tecnicos: stri
   const unicos = (xs: string[]) => [...new Set(xs)]
   // Cada parámetro sigue la matriz de su muestra: suelo, sedimento y lodo van por sus reglas; todo lo demás, por las de agua.
   const tipoDe = new Map(muestras.map((m) => [m.id, tipoSolido(m.matriz, m.submatriz)]))
-  const labo = d.parametros.filter((p) => !p.es_insitu)
+  // La prueba de infiltración es in situ aunque la app no la registre (no está entre los parámetros in situ del servidor).
+  const esInsitu = (p: { parametro: string; es_insitu: boolean }) => p.es_insitu || /infiltracion/.test(norm(p.parametro))
+  const labo = d.parametros.filter((p) => !esInsitu(p))
   const agua = agruparParametros(unicos(labo.filter((p) => !tipoDe.get(p.muestra_id)).map((p) => p.parametro)))
   const solidos = agruparSolidos(labo.flatMap((p) => { const tipo = tipoDe.get(p.muestra_id); return tipo ? [{ parametro: p.parametro, tipo }] : [] }))
   const fisicoquimicos = [...agua.fisicoquimicos, ...solidos]
   const { hidrobiologicos } = agua
+  const unidadMuestra = !solidos.length ? undefined : agua.fisicoquimicos.length ? 'mL / g' : 'g'
   const partes = [fisicoquimicos.length && 'físico-química', hidrobiologicos.length && 'hidrobiológica'].filter(Boolean)
   const codigo = ficha.codigo_muestreo?.trim() || d.plan.nombre.match(/\d+-\d{2}/)?.[0] || ''
   return {
@@ -38,8 +43,8 @@ export function armarPdt(d: DatosPlan, ficha: FichaCustodia = {}, tecnicos: stri
     tipos: { puntual: tipos.has(2), compuesto: tipos.has(1), integrado: tipos.has(0) },
     objetivo: `Realizar caracterización ${partes.join(' e ') || 'de campo'} de los puntos mencionados, según las condiciones del cliente.`,
     puntos: unicos(muestras.map((m) => m.punto_texto.trim())),
-    fisicoquimicos, hidrobiologicos,
-    insitu: unicos(d.parametros.filter((p) => p.es_insitu).map((p) => nombreCorto(p.parametro))).sort((a, b) => a.localeCompare(b, 'es')),
+    fisicoquimicos, hidrobiologicos, unidadMuestra,
+    insitu: unicos(d.parametros.filter(esInsitu).map((p) => nombreCorto(p.parametro).replace(PREFIJO_SOLIDO, ''))).sort((a, b) => a.localeCompare(b, 'es')),
   }
 }
 
@@ -98,7 +103,7 @@ export function llenarPdt(plantilla: Uint8Array, d: DatosPdt): Uint8Array {
   const puntos = d.puntos.length ? d.puntos : ['']
   puntos.forEach((p, i) => generar(i === puntos.length - 1 ? 44 : 19, (fila) => poner(fila, 'B', p), null,
     (n) => [`B${n}:G${n}`, `H${n}:J${n}`, `K${n}:L${n}`]))
-  for (let v = 45; v <= 53; v++) fijo(v)
+  for (let v = 45; v <= 53; v++) fijo(v, (fila) => (v === 53 && d.unidadMuestra ? poner(fila, 'D', `TAMAÑO MINIMO DE MUESTRA (${d.unidadMuestra})`) : fila))
 
   // Tablas de parámetros: una fila por grupo de preservación
   const tabla = (grupos: FilaPdt[], modelo: (i: number, n: number) => number) => grupos.forEach((g, i) => {
