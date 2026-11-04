@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Un push nuevo a la misma rama cancela la corrida anterior.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Tipos, tests y build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci # xlsx viene del CDN de SheetJS (el lock fija su hash)
+      - run: npm test
+      - run: npm run build # incluye tsc --noEmit
+
+  base-de-datos:
+    name: Migraciones y RLS (Postgres 16)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Postgres 16
+        run: test -x /usr/lib/postgresql/16/bin/initdb || (sudo apt-get update && sudo apt-get install -y postgresql-16)
+      # El script corre como usuario postgres y necesita leer el repo: se copia a /tmp porque el HOME del runner puede no ser legible.
+      - name: Pruebas de base de datos
+        run: |
+          sudo cp -r "$GITHUB_WORKSPACE" /tmp/repo
+          sudo chmod -R a+rX /tmp/repo
+          cd /tmp/repo
+          sudo bash scripts/db-test.sh
