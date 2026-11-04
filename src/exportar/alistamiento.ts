@@ -122,12 +122,13 @@ export function agruparParametros(parametros: string[]): { fisicoquimicos: FilaP
 // Los parámetros subcontratados quedan «por definir» a propósito: cambian seguido de laboratorio.
 // ponytail: valores de Hoja3/Hoja6 y Hoja5 sin cruzar contra el AT; pH/conductividad y metales difieren de mínimo entre hojas (no se muestra el mínimo de análisis, solo lo que se trae).
 const AMBIENTE = 'Temperatura ambiente, entregar lo antes posible'
+const REFRIGERADO = 'Refrigerar a 4 ± 2 °C' // aceites y grasas, en suelo, sedimento y lodo (indicación del laboratorio)
 export const GRUPOS_SOLIDO: Record<string, Grupo> = {
   SUELO_GENERAL: fq('SUELO · GENERAL', '300-500 g', AMBIENTE, 'Bolsa ziploc', 'Máximo 30 días'),
   SUELO_DENSIDAD_APARENTE: fq('SUELO · DENSIDAD APARENTE', 'Anillos de 5x5 cm', AMBIENTE, 'Anillos de 5x5 cm', 'Muestra inalterada, recubierta con papel vinipel · Máximo 30 días'),
-  GYA_SUELO: fq('SUELO · ACEITES Y GRASAS / HIDROCARBUROS', '100 g', AMBIENTE, 'Frasco de vidrio boca ancha', 'Máximo 30 días'),
+  GYA_SUELO: fq('SUELO · ACEITES Y GRASAS / HIDROCARBUROS', '100 g', REFRIGERADO, 'Frasco de vidrio boca ancha', 'Máximo 30 días'),
   MICRO_SUELO: fq('SUELO · MICROBIOLÓGICOS', '100 g', 'Refrigerar a < 10 °C', 'Frasco de vidrio boca ancha estéril', 'Analizar lo antes posible · Máximo 24 h'),
-  GYA_SEDIMENTO: fq('SEDIMENTO Y LODO · ACEITES Y GRASAS / HIDROCARBUROS', 'Por definir', 'Refrigerar a 4 ± 2 °C', 'Vidrio con tapa forrada de PTFE', 'Máximo 28 días'),
+  GYA_SEDIMENTO: fq('SEDIMENTO Y LODO · ACEITES Y GRASAS / HIDROCARBUROS', 'Por definir', REFRIGERADO, 'Vidrio con tapa forrada de PTFE', 'Máximo 28 días'),
   MICRO_SEDIMENTO: fq('SEDIMENTO Y LODO · MICROBIOLÓGICOS', 'Por definir', 'Refrigerar a 2-5 °C', 'Vidrio estéril', 'Máximo 6 h'),
   AGUA_PORO: fq('SEDIMENTO · AGUA DE PORO', 'Mínimo 5 kg', 'Refrigerar a 4 ± 2 °C', 'Bolsas ziploc', 'Máximo 8 días'),
 }

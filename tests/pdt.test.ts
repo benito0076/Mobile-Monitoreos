@@ -51,7 +51,7 @@ describe('alistamiento: suelo, sedimento y lodo', () => {
     expect(por['SUELO · GENERAL']).toMatchObject({ minimo: '300-500 g', material: 'Bolsa ziploc', observaciones: 'Máximo 30 días',
       parametros: ['Cadmio', 'Conductividad Eléctrica', 'Densidad real', 'Humedad', 'pH', 'Plomo', 'PSI (Porcentaje de sodio intercambiable)', 'Textura'] })
     expect(por['SUELO · DENSIDAD APARENTE'].parametros).toEqual(['Densidad aparente'])
-    expect(por['SUELO · ACEITES Y GRASAS / HIDROCARBUROS']).toMatchObject({ minimo: '100 g', material: 'Frasco de vidrio boca ancha' })
+    expect(por['SUELO · ACEITES Y GRASAS / HIDROCARBUROS']).toMatchObject({ minimo: '100 g', preservante: 'Refrigerar a 4 ± 2 °C', material: 'Frasco de vidrio boca ancha' })
     expect(por['SUELO · MICROBIOLÓGICOS']).toMatchObject({ preservante: 'Refrigerar a < 10 °C', observaciones: 'Analizar lo antes posible · Máximo 24 h' })
     expect(por['POR DEFINIR'].parametros).toEqual(['Aluminio intercambiable', 'Arsénico', 'Bases cambiables [Sodio]', 'Fluoruros'])
     expect(JSON.stringify(r)).not.toMatch(/HNO3|H2SO4/) // nada de preservas de agua en sólidos
@@ -60,6 +60,7 @@ describe('alistamiento: suelo, sedimento y lodo', () => {
   test('sedimento y lodo: tabla de almacenamiento; agua de poro aparte', () => {
     const r = agruparSolidos([{ parametro: 'Sedimento - Aceites y Grasas', tipo: 'sedimento' }, { parametro: 'Lodo - Hidrocarburos', tipo: 'lodo' },
       { parametro: 'Sedimento - Nitrógeno amoniacal en agua de poro', tipo: 'sedimento' }, { parametro: 'Sedimento - Plomo', tipo: 'sedimento' }])
+    expect(r[0].preservante).toBe('Refrigerar a 4 ± 2 °C')
     expect(r.map((f) => [f.grupo, f.parametros])).toEqual([['SEDIMENTO Y LODO · ACEITES Y GRASAS / HIDROCARBUROS', ['Aceites y Grasas', 'Hidrocarburos']],
       ['SEDIMENTO · AGUA DE PORO', ['Nitrógeno amoniacal en agua de poro']], ['POR DEFINIR', ['Plomo']]])
   })
