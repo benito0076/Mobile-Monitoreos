@@ -29,7 +29,7 @@ jobs:
 
   base-de-datos:
     name: Migraciones y RLS (Postgres 16)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # fijo: ubuntu-latest ya es 26.04, que no trae Postgres 16 (el script lo necesita)
     steps:
       - uses: actions/checkout@v4
       - name: Postgres 16
