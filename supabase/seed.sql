@@ -20,3 +20,11 @@ on conflict do nothing;
 insert into parametros_insitu (nombre, unidad, minimo, maximo, obligatorio) values
   ('Cloro Residual Libre In Situ', 'mg/L', 0, 5, true)
 on conflict do nothing;
+
+-- Conductividad eléctrica del monitoreo compuesto (cada alícuota se guarda en Sampler en SUBM0…SUBM24).
+-- Se registran las dos escrituras posibles del nombre (un espacio y dos espacios antes de «Compuesto»): la app compara el nombre letra por letra.
+-- Cuando se confirme cuál trae el plan de Sampler, se puede borrar la otra desde la pantalla de parámetros in situ de la oficina.
+insert into parametros_insitu (nombre, unidad, minimo, maximo, obligatorio) values
+  ('Agua - Conductividad Eléctrica - Compuesto',  'µS/cm', 0, 100000, true),
+  ('Agua - Conductividad Eléctrica -  Compuesto', 'µS/cm', 0, 100000, true)
+on conflict do nothing;

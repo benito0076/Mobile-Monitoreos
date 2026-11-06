@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { liveQuery } from 'dexie'
 import { local, type MuestraLocal, type PlanLocal } from '../../datos/db-local'
 import { esCompuesta } from '../../datos/mediciones'
+import { itemsDe } from '../../datos/subparametros'
 import { fechaEnvioPorMuestra, fechaLegible } from '../../datos/envios'
 import { PanelEnvios } from '../envios/PanelEnvios'
 import { fuenteLocal } from '../envios/fuentes'
@@ -31,7 +32,7 @@ export function ListaMuestras({ plan, abrir, usuario }: { plan: PlanLocal; abrir
       }
       const enviadas = await fechaEnvioPorMuestra(plan.id)
       return muestras.map((m) => {
-        const insituSet = paramsPorMuestra.get(m.id) ?? new Set<string>()
+        const insituSet = new Set(itemsDe([...(paramsPorMuestra.get(m.id) ?? [])]).map((i) => i.nombre)) // con las lecturas de los parámetros de varias lecturas
         const medMuestra = medidas.filter((x) => x.muestra_id === m.id && insituSet.has(x.parametro))
         return {
           m,
