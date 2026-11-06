@@ -2,6 +2,7 @@
 // Para cambiarlo basta con editar COLUMNAS / construirExportacion / aLibro; nada más depende de la forma del archivo.
 import * as XLSX from 'xlsx'
 import { elegirVigente as vigente } from '../datos/mediciones'
+import { itemsDe } from '../datos/subparametros'
 
 export interface DatosPlan {
   plan: { nombre: string }
@@ -36,12 +37,12 @@ export function construirExportacion(d: DatosPlan): Exportacion {
 
   const resultados = d.muestras
     .slice().sort((a, b) => a.codigo.localeCompare(b.codigo))
-    .flatMap((m) => alicuotasDe(m.id).flatMap((a) => d.parametros.filter((p) => p.muestra_id === m.id && p.es_insitu).map((p): Fila => {
-      const x = vig.get(`${m.id}\n${p.parametro}\n${a ?? ''}`)
+    .flatMap((m) => alicuotasDe(m.id).flatMap((a) => d.parametros.filter((p) => p.muestra_id === m.id && p.es_insitu).flatMap((p) => itemsDe([p.parametro])).map((p): Fila => {
+      const x = vig.get(`${m.id}\n${p.nombre}\n${a ?? ''}`)
       return {
         'Codigo muestra': m.codigo, 'Punto': m.punto_texto,
         'Tipo': m.tipo, 'Matriz': m.matriz, 'Submatriz': m.submatriz, 'Estado muestra': m.estado,
-        'Parametro': p.parametro, 'Alicuota': a, 'In situ': p.es_insitu ? 'Si' : 'No',
+        'Parametro': p.nombre, 'Alicuota': a, 'In situ': 'Si',
         'Valor': x?.valor ?? null, 'Unidad': x?.unidad || null, 'Fecha y hora toma': x?.hora_telefono ?? null,
         'Latitud': x?.lat ?? null, 'Longitud': x?.lon ?? null, 'Precision GPS (m)': x?.precision_m ?? null,
         'Version': x?.version ?? null, 'Marcada': x ? (x.marcada ? 'Si' : 'No') : null, 'Motivo marca': x?.motivo_marca ?? null,

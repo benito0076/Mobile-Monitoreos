@@ -3,6 +3,7 @@ import { liveQuery } from 'dexie'
 import { local, type DescripcionLocal, type FotoLocal, type MedicionLocal, type MuestraLocal, type ParametroInsitu } from '../../datos/db-local'
 import { cambiarEstado, claveMedicion, corregirMedicion, eliminarFotoPendiente, esCompuesta, descripcionVigente, guardarDescripcion, guardarFoto, guardarMedicion, vigentes } from '../../datos/mediciones'
 import { advertenciaGps, advertenciaRango, parsearValor } from '../../datos/validar-medicion'
+import { caudalLs, itemsDe, LECTURAS, nombreLectura, type Item } from '../../datos/subparametros'
 import { leerGps } from '../../datos/gps'
 import { comprimir } from '../../datos/fotos'
 import { UMBRAL_GPS_M } from '../../config'
@@ -35,8 +36,8 @@ function MiniaturaFoto({ foto, alQuitar }: { foto: FotoLocal; alQuitar?: () => v
   )
 }
 
-function FilaMedicion({ muestra, nombre, alicuota, info, actual, usuario, umbral, alGuardar }: {
-  muestra: string; nombre: string; alicuota?: number; info?: ParametroInsitu; actual?: MedicionLocal; usuario: string; umbral: number; alGuardar: () => void
+function FilaMedicion({ muestra, nombre, etiqueta, alicuota, info, actual, usuario, umbral, alGuardar }: {
+  muestra: string; nombre: string; etiqueta?: string; alicuota?: number; info?: ParametroInsitu; actual?: MedicionLocal; usuario: string; umbral: number; alGuardar: () => void
 }) {
   const [valor, setValor] = useState('')
   const [motivo, setMotivo] = useState('')
@@ -73,7 +74,7 @@ function FilaMedicion({ muestra, nombre, alicuota, info, actual, usuario, umbral
   const editando = !actual || corrigiendo
   return (
     <li className="medicion">
-      <b>{nombre}</b> <small>{unidad}{info?.obligatorio ? ' · obligatorio' : ''}</small>
+      <b>{etiqueta ?? nombre}</b> <small>{unidad}{info?.obligatorio ? ' · obligatorio' : ''}</small>
       {actual && !corrigiendo && (
         <p>
           {actual.valor} {actual.unidad} · v{actual.version} · {new Date(actual.hora_telefono).toLocaleTimeString()}
@@ -172,13 +173,19 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
     catch (x) { setMsg((x as Error).message) }
   }
 
+  // Los parámetros de varias lecturas (caudal: volumen y tiempo) se piden como sus lecturas.
+  const items = itemsDe(params)
+  const infoDe = (it: Item): ParametroInsitu | undefined => {
+    const base = insitu.get(it.base)
+    return it.unidad && base ? { ...base, nombre: it.nombre, unidad: it.unidad, minimo: null, maximo: null } : base
+  }
   const maxAlicuotaConDatos = Math.max(1, ...[...med.values()].map((x) => x.alicuota ?? 0))
   const alicuotas: (number | undefined)[] = muestra && esCompuesta(muestra) ? Array.from({ length: abiertas }, (_, i) => i + 1) : [undefined]
 
   async function cerrar(forzar = false) {
     if (!forzar) {
-      const faltan = alicuotas.flatMap((a) => params.filter((p) => insitu.get(p)?.obligatorio && !med.has(claveMedicion(p, a)))
-        .map((p) => `Falta medir: ${p.trim()}${a ? ` (alícuota ${a})` : ''}`))
+      const faltan = alicuotas.flatMap((a) => items.filter((it) => insitu.get(it.base)?.obligatorio && !med.has(claveMedicion(it.nombre, a)))
+        .map((it) => `Falta medir: ${it.etiqueta}${a ? ` (alícuota ${a})` : ''}`))
       const avisos = [...faltan, ...(desc ? [] : ['Falta la descripción del punto'])]
       if (avisos.length) return setAvisosCierre(avisos)
     }
@@ -207,7 +214,12 @@ export function FormMuestra({ id, usuario, volver }: { id: string; usuario: stri
             </h4>
           )}
           <ul className="planes">
-            {params.map((p) => <FilaMedicion key={p} muestra={id} nombre={p} alicuota={a} info={insitu.get(p)} actual={med.get(claveMedicion(p, a))} usuario={usuario} umbral={umbral} alGuardar={() => {}} />)}
+            {items.map((it) => <FilaMedicion key={it.nombre} muestra={id} nombre={it.nombre} etiqueta={it.etiqueta} alicuota={a} info={infoDe(it)} actual={med.get(claveMedicion(it.nombre, a))} usuario={usuario} umbral={umbral} alGuardar={() => {}} />)}
+            {Object.keys(LECTURAS).filter((b) => params.some((p) => p.trim() === b)).map((b) => {
+              const [v, t] = LECTURAS[b].map((l) => med.get(claveMedicion(nombreLectura(b, l), a))?.valor)
+              const c = caudalLs(v, t)
+              return c !== null && <li key={`caudal ${b}`} className="medicion"><small>Caudal calculado: <b>{c} L/s</b></small></li>
+            })}
           </ul>
         </div>
       ))}
