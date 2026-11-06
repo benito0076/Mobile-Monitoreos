@@ -28,3 +28,11 @@ insert into parametros_insitu (nombre, unidad, minimo, maximo, obligatorio) valu
   ('Agua - Conductividad Eléctrica - Compuesto',  'µS/cm', 0, 100000, true),
   ('Agua - Conductividad Eléctrica -  Compuesto', 'µS/cm', 0, 100000, true)
 on conflict do nothing;
+
+-- Oxígeno disuelto del monitoreo compuesto (cada alícuota se guarda en Sampler en SUBM0…SUBM24 y su hora en HORA0…HORA24).
+-- Mismos valores que el puntual (mg/L, 0 a 20, obligatorio). Se registran las dos escrituras posibles del nombre (un espacio y dos espacios antes de «Compuesto»);
+-- cuando se confirme cuál trae el plan de Sampler, se puede borrar la otra desde la pantalla de parámetros in situ de la oficina.
+insert into parametros_insitu (nombre, unidad, minimo, maximo, obligatorio) values
+  ('Agua - Oxígeno Disuelto - Compuesto',  'mg/L', 0, 20, true),
+  ('Agua - Oxígeno Disuelto -  Compuesto', 'mg/L', 0, 20, true)
+on conflict do nothing;
