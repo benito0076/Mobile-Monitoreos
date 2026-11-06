@@ -1,0 +1,449 @@
+using System.Windows.Forms;
+using System.IO;
+using System;
+using System.Data;
+using System.Data.SqlClient;
+using System.Drawing;
+using System.Net;
+using System.Text;
+using System.Globalization;
+using Microsoft.Win32;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Collections.Generic;
+using System.Collections;
+using ExcelDataReader;
+using System.Linq.Expressions;
+using System.Linq;
+using System.Media;
+using System.Reflection.Emit;
+
+public class Script
+{
+    //Guion de importación de resultados IN SITU desde el Excel de la app de campo (borrador sin probar contra Sampler).
+    //Parte del guion del ICP: mismas funciones auxiliares, sin los controles de calidad.
+
+    public void EjecutarDesatendido(string NombreArchivo, string sCadCnx, long user, long lab)
+    {
+        Ejecutar(NombreArchivo, null, sCadCnx, user, lab, 0);
+    }
+
+    // ====== AJUSTES (confirmar contra Sampler antes de usar en producción) ======
+    // true = solo escribe en la consola lo que haría; no guarda nada en la base de datos.
+    const bool SOLO_SIMULAR = true;
+    // Variable de Sampler donde se guarda el valor medido de cada parámetro In Situ PUNTUAL (en el guion del ICP es "CON" para todos).
+    // Dato dado por el laboratorio. Los COMPUESTOS van en el mapa de más abajo.
+    // El nombre se compara sin mayúsculas/minúsculas y sin espacios al inicio o al final.
+    static readonly Dictionary<string, string> VARIABLES_PUNTUAL = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Agua - Caudal > 2 m3/s y < 10 m3/s", "L17" },
+        { "Agua - Conductividad a 25°C In Situ - Puntual", "ROB" },
+        { "Agua - Temperatura", "T" },
+        { "Agua - pH", "pHOB" },
+        { "pH", "pHOB" },   // así viene escrito en el plan que carga la app
+        { "Agua - Oxígeno Disuelto", "LDO2" },
+        { "Agua - Temperatura en la zona de mezcla térmica", "T" },
+        { "Cloro Residual Libre In Situ", "LD" },
+    };
+
+    // Parámetros COMPUESTOS: la app exporta una fila por alícuota (1, 2, 3…) y Sampler guarda cada una en una variable
+    // con prefijo + número (SUBM0 … SUBM24 = hasta 25 submuestras).
+    static readonly Dictionary<string, string> PREFIJOS_COMPUESTO = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Agua - Conductividad Eléctrica - Compuesto", "SUBM" },
+        { "Agua - Conductividad Eléctrica -  Compuesto", "SUBM" },   // con dos espacios, como viene en Sampler (dejar solo la que coincida)
+        { "Agua - pH Compuesto", "SUBM" },
+        { "Agua - Oxígeno Disuelto - Compuesto", "SUBM" },
+        { "Agua - Oxígeno Disuelto -  Compuesto", "SUBM" },   // con dos espacios (dejar solo la que coincida con el plan de Sampler)
+        { "Agua - Temperatura - Compuesto", "SUBM" },
+        { "Agua - Sólidos Sedimentables - Compuesto", "SUBM" },
+        // El caudal compuesto no usa SUBM: la app lo exporta como dos filas por alícuota («... | Volumen» y «... | Tiempo»), ver más abajo.
+    };
+    // Lecturas del caudal compuesto: variables Volumen0…Volumen24 (en L) y Tiempo0…Tiempo24 (en s), y HORA0…HORA24 una vez por alícuota
+    // (la hora de la lectura del volumen). Unidades y hora confirmadas por el laboratorio.
+    static readonly HashSet<string> LECTURAS_VALIDAS = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Volumen", "Tiempo" };
+    // Todos los compuestos guardan además la hora de cada alícuota en HORA0 … HORA24 (mismo número que su SUBM).
+    const string PREFIJO_HORA = "HORA";
+    const string FORMATO_HORA = "HH:mm";   // confirmado por el laboratorio
+    const int INDICE_PRIMERA_ALICUOTA = 0;   // confirmado por el laboratorio: la alícuota 1 de la app va en SUBM0 y HORA0
+    const int ULTIMO_INDICE_ALICUOTA = 24;
+
+    static string Texto(IExcelDataReader r, Dictionary<string, int> cols, string columna)
+    {
+        int i;
+        if (!cols.TryGetValue(columna, out i) || r.IsDBNull(i)) return "";
+        return Convert.ToString(r.GetValue(i), CultureInfo.InvariantCulture).Trim();
+    }
+
+    // Lee el Excel de resultados In Situ de la app (hoja "Resultados": una fila por muestra y parámetro).
+    public void Ejecutar(string NombreArchivo, TextBox Console, string sCadCnx, long user, long lab, long lineas)
+    {
+        if (Console == null) Console = new TextBox();
+        Console.Text = "Iniciando importación In Situ: " + NombreArchivo + " " + DateTime.Now.ToString() + (SOLO_SIMULAR ? " (SIMULACIÓN: no se guarda nada)" : "") + Environment.NewLine;
+
+        int guardadas = 0, sinValor = 0, alicuotas = 0, errores = 0;
+        var idsMuestra = new Dictionary<string, long>();   // código → IdMuestra (evita repetir la consulta)
+        var cols = new Dictionary<string, int>();
+        bool cabecera = true;
+        CultureInfo es = new CultureInfo("es-CO");
+
+        using (FileStream fs = File.Open(NombreArchivo, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        using (IExcelDataReader r = ExcelReaderFactory.CreateReader(fs))   // primera hoja = "Resultados"
+        {
+            while (r.Read())
+            {
+                if (cabecera)
+                {
+                    for (int i = 0; i < r.FieldCount; i++) cols[Convert.ToString(r.GetValue(i)).Trim()] = i;
+                    cabecera = false;
+                    continue;
+                }
+
+                string codigo = Texto(r, cols, "Codigo muestra");
+                string parametro = Texto(r, cols, "Parametro");
+                string valor = Texto(r, cols, "Valor");
+                if (codigo == "" || parametro == "") continue;
+                if (valor == "") { sinValor++; continue; }   // parámetro todavía sin medir
+
+                // Variable de Sampler donde va este valor: por parámetro (puntuales) o prefijo + número de alícuota (compuestos).
+                // Parámetros de varias lecturas: la app los exporta como «Parámetro | Lectura» (caudal compuesto: Volumen y Tiempo).
+                string parametroSampler = parametro, lectura = null;
+                int barra = parametro.IndexOf(" | ");
+                if (barra > 0) { lectura = parametro.Substring(barra + 3).Trim(); parametroSampler = parametro.Substring(0, barra).Trim(); }
+
+                string variable;
+                string variableHora = null;   // solo compuestos
+                string alicuota = Texto(r, cols, "Alicuota");
+                if (alicuota != "")
+                {
+                    string prefijo = null;
+                    int n;
+                    bool conVariables = int.TryParse(alicuota, out n);
+                    if (conVariables && lectura != null) { conVariables = LECTURAS_VALIDAS.Contains(lectura); prefijo = lectura; }
+                    else if (conVariables) { conVariables = PREFIJOS_COMPUESTO.TryGetValue(parametro, out prefijo); }
+                    if (!conVariables)
+                    {
+                        alicuotas++;
+                        Console.Text += "PENDIENTE alícuota (sin variables definidas para este parámetro): " + codigo + " | " + parametro + " | alícuota " + alicuota + Environment.NewLine;
+                        continue;
+                    }
+                    int indice = n - 1 + INDICE_PRIMERA_ALICUOTA;
+                    if (indice < 0 || indice > ULTIMO_INDICE_ALICUOTA)
+                    {
+                        Console.Text += "ERROR: la alícuota " + alicuota + " de " + codigo + " | " + parametro + " no cabe en " + prefijo + "0…" + prefijo + ULTIMO_INDICE_ALICUOTA + Environment.NewLine;
+                        errores++;
+                        continue;
+                    }
+                    variable = prefijo + indice;
+                    // La hora de la alícuota se guarda una sola vez: con las lecturas del caudal, junto con el volumen.
+                    variableHora = (lectura == null || string.Equals(lectura, "Volumen", StringComparison.OrdinalIgnoreCase)) ? PREFIJO_HORA + indice : null;
+                }
+                else if (!VARIABLES_PUNTUAL.TryGetValue(parametro, out variable))
+                {
+                    Console.Text += "SIN VARIABLE configurada para «" + parametro + "»: " + codigo + Environment.NewLine;
+                    errores++;
+                    continue;
+                }
+
+                try
+                {
+                    long idMuestra;
+                    if (!idsMuestra.TryGetValue(codigo, out idMuestra))
+                    {
+                        idMuestra = ObtenerIdMuestraDadoCodigo(codigo, user, lab, Console, sCadCnx);
+                        idsMuestra[codigo] = idMuestra;
+                    }
+                    if (idMuestra <= 0) { Console.Text += "ERROR: no existe la muestra " + codigo + Environment.NewLine; errores++; continue; }
+
+                    // CONFIRMAR: el procedimiento se llama "...XSiglaParametro2"; si solo entiende siglas, hace falta una tabla nombre → sigla.
+                    long idParametro = ObtenerIdParametroDadoIdMuestraYNombreParametroXSiglaParametro2(idMuestra, parametroSampler, Console, sCadCnx);
+                    if (idParametro <= 0) { Console.Text += "ERROR: " + codigo + " no tiene el parámetro «" + parametro + "»" + Environment.NewLine; errores++; continue; }
+
+                    decimal numero;
+                    string texto = valor.Replace(".", ",");   // como en el guion del ICP: la base espera coma decimal
+                    if (!decimal.TryParse(texto, NumberStyles.Number, es, out numero)) { Console.Text += "ERROR: valor no numérico «" + valor + "» en " + codigo + " | " + parametro + Environment.NewLine; errores++; continue; }
+
+                    long idMedicion = ObtenerIdMedicionDadoIdMuestraYParametro(idMuestra, idParametro, Console, sCadCnx);
+                    long idVariable = ObtenerIdVariablesParametroExtraccionDadoIdParametro(idParametro, variable, Console, sCadCnx);
+                    if (idMedicion <= 0 || idVariable <= 0) { Console.Text += "ERROR: sin medición o variable «" + variable + "» para " + codigo + " | " + parametro + Environment.NewLine; errores++; continue; }
+
+                    Console.Text += codigo + " | " + parametro + " | variable " + variable + " | " + texto + " " + Texto(r, cols, "Unidad") + Environment.NewLine;
+                    bool guardado = SOLO_SIMULAR || GuardarLecturasDeLasVariables(idVariable, idMedicion, numero, texto, Console, sCadCnx);
+                    if (guardado) guardadas++;
+                    else errores++;
+
+                    // Compuestos: la hora de la alícuota (la app la exporta en UTC; Sampler trabaja en hora de Colombia, UTC-5 sin horario de verano).
+                    if (guardado && variableHora != null)
+                    {
+                        string horaTxt = Texto(r, cols, "Fecha y hora toma");
+                        DateTime utc;
+                        if (!DateTime.TryParse(horaTxt, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out utc))
+                        {
+                            Console.Text += "AVISO: sin hora válida para " + variableHora + " en " + codigo + " | " + parametro + " («" + horaTxt + "»)" + Environment.NewLine;
+                        }
+                        else
+                        {
+                            string hora = utc.AddHours(-5).ToString(FORMATO_HORA, CultureInfo.InvariantCulture);
+                            long idVariableHora = ObtenerIdVariablesParametroExtraccionDadoIdParametro(idParametro, variableHora, Console, sCadCnx);
+                            if (idVariableHora <= 0) { Console.Text += "ERROR: sin variable «" + variableHora + "» para " + codigo + " | " + parametro + Environment.NewLine; errores++; }
+                            else
+                            {
+                                Console.Text += codigo + " | " + parametro + " | variable " + variableHora + " | " + hora + Environment.NewLine;
+                                if (!SOLO_SIMULAR && !GuardarLecturasDeLasVariables(idVariableHora, idMedicion, 0, hora, Console, sCadCnx)) errores++;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex) { Console.Text += "ERROR en " + codigo + " | " + parametro + ": " + ex.Message + Environment.NewLine; errores++; }
+            }
+        }
+
+        Console.Text += "Resumen: " + guardadas + " lecturas " + (SOLO_SIMULAR ? "simuladas" : "guardadas") + ", " + sinValor + " sin valor, " + alicuotas + " alícuotas pendientes, " + errores + " errores." + Environment.NewLine;
+    }
+
+
+    public long ObtenerIdMuestraDadoCodigo(string sCodMuestra, long IdUsuario, long IdLaboratorio, System.Windows.Forms.TextBox Console, string sCadCnx)
+    {
+        long IdMuestra = 0;
+        SqlConnection conn = null;
+        try
+        {
+            //Abrir Conexion
+            conn = new SqlConnection(sCadCnx);
+            conn.Open();
+
+            //Definir el comando (SP)
+            SqlCommand cmd = new SqlCommand("Muestras_ObtenerIdMuestraDadoCodMuestraYIdLab", conn);
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            //Parametros
+            cmd.Parameters.Add(new SqlParameter("@CodMuestra", sCodMuestra));
+            cmd.Parameters.Add(new SqlParameter("@IdUsuario", IdUsuario));
+            cmd.Parameters.Add(new SqlParameter("@IdLaboratorio", IdLaboratorio));
+
+            // Set Output Paramater
+            SqlParameter OutputParam = new SqlParameter("@IdMuestra", SqlDbType.BigInt);
+            OutputParam.Direction = ParameterDirection.Output;
+            cmd.Parameters.Add(OutputParam);
+
+            //Ejecutar el Stored procedure
+            cmd.ExecuteNonQuery();
+            conn.Close();
+
+            if (cmd.Parameters["@IdMuestra"].Value.ToString() != "")
+                IdMuestra = long.Parse(cmd.Parameters["@IdMuestra"].Value.ToString());
+
+            //Mensaje de exito
+            //Console.Text += "Ejecucion exitosa. ObtenerIdMuestraDadoCodigo --> " + IdMuestra.ToString() + Environment.NewLine;
+            return IdMuestra;
+        }
+        catch (Exception ex)
+        {
+            //Console.Text += "Error en ObtenerIdMuestraDadoCodigo: " + ex.Message + Environment.NewLine;
+            return 0;
+        }
+        finally
+        {
+            //Cerrar conexion
+            if (conn != null)
+            {
+                conn.Close();
+            }
+        }
+    }
+
+    public long ObtenerIdParametroDadoIdMuestraYNombreParametroXSiglaParametro2(long IdMuestra, string NombreParametro, System.Windows.Forms.TextBox Console, string sCadCnx)
+    {
+        long IdParametro = 0;
+        SqlConnection conn = null;
+        try
+        {
+            //Abrir Conexion
+            conn = new SqlConnection(sCadCnx);
+            conn.Open();
+
+            //Definir el comando (SP)
+            SqlCommand cmd = new SqlCommand("ObtenerIdParametroDadoIdMuestraYNombreParametroXSiglaParametro2", conn);
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            //Parametros
+            cmd.Parameters.Add(new SqlParameter("@IdMuestra", IdMuestra));
+            cmd.Parameters.Add(new SqlParameter("@NombreParametro", NombreParametro));
+
+            // Set Output Paramater
+            SqlParameter OutputParam = new SqlParameter("@IdParametro", SqlDbType.BigInt);
+            OutputParam.Direction = ParameterDirection.Output;
+            cmd.Parameters.Add(OutputParam);
+
+            //Ejecutar el Stored procedure
+            cmd.ExecuteNonQuery();
+            conn.Close();
+
+            IdParametro = long.Parse(cmd.Parameters["@IdParametro"].Value.ToString());
+
+            //Mensaje de exito
+            //Console.Text += "Ejecucion exitosa. ObtenerIdMedicionDadoIdMuestraYParametro --> " + IdParametro.ToString() + Environment.NewLine;
+            return IdParametro;
+        }
+        catch (Exception ex)
+        {
+            Console.Text += "Error en ObtenerIdMedicionDadoIdMuestraYParametro: " + ex.Message + Environment.NewLine;
+            return 0;
+        }
+        finally
+        {
+            //Cerrar conexion
+            if (conn != null)
+            {
+                conn.Close();
+            }
+        }
+    }
+
+    public long ObtenerIdMedicionDadoIdMuestraYParametro(long IdMuestra, long IdParametros, System.Windows.Forms.TextBox Console, string sCadCnx)
+    {
+        long IdMedicion = 0;
+        SqlConnection conn = null;
+        try
+        {
+            //Abrir Conexion
+            conn = new SqlConnection(sCadCnx);
+            conn.Open();
+
+            Console.Text += "Ejecutar: ObtenerIdMedicionDadoIdMuestraYParametro" + Environment.NewLine;
+            Console.Text += "@IdMuestra: " + IdMuestra.ToString() + Environment.NewLine;
+            Console.Text += "@IdParametro: " + IdParametros.ToString() + Environment.NewLine;
+
+            //Definir el comando (SP)
+            SqlCommand cmd = new SqlCommand("ObtenerIdMedicionDadoIdMuestraYParametro", conn);
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            //Parametros
+            cmd.Parameters.Add(new SqlParameter("@IdMuestra", IdMuestra));
+            cmd.Parameters.Add(new SqlParameter("@IdParametro", IdParametros));
+
+            // Set Output Paramater
+            SqlParameter OutputParam = new SqlParameter("@IdMedicion", SqlDbType.BigInt);
+            OutputParam.Direction = ParameterDirection.Output;
+            cmd.Parameters.Add(OutputParam);
+
+            //Ejecutar el Stored procedure
+            cmd.ExecuteNonQuery();
+            conn.Close();
+
+            IdMedicion = long.Parse(cmd.Parameters["@IdMedicion"].Value.ToString());
+
+            //Mensaje de exito
+            if (Console != null) Console.Text += "Ejecucion exitosa. Id Medicion: " + IdMedicion.ToString() + Environment.NewLine;
+            return IdMedicion;
+        }
+        catch (Exception ex)
+        {
+            Console.Text += "Error: " + ex.Message + Environment.NewLine;
+            //Mensaje de error
+            if (Console != null) Console.Text += "Ejecucion fallida ObtenerIdMedicionDadoIdMuestraYParametro..." + Environment.NewLine; ;
+            return 0;
+        }
+        finally
+        {
+            //Cerrar conexion
+            if (conn != null)
+            {
+                conn.Close();
+            }
+        }
+    }
+
+    public long ObtenerIdVariablesParametroExtraccionDadoIdParametro(long IdMuestra, string variable, System.Windows.Forms.TextBox Console, string sCadCnx)
+    {
+        long IdMedicion = 0;
+        SqlConnection conn = null;
+        try
+        {
+            //Abrir Conexion
+            conn = new SqlConnection(sCadCnx);
+            conn.Open();
+
+            //Definir el comando (SP)
+            SqlCommand cmd = new SqlCommand("ObtenerIdVariablesParametroIdParametros", conn);
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            //Parametros
+            cmd.Parameters.Add(new SqlParameter("@IdParametro", IdMuestra));
+            cmd.Parameters.Add(new SqlParameter("@Variable", variable));
+
+            // Set Output Paramater
+            SqlParameter OutputParam = new SqlParameter("@Retorno", SqlDbType.BigInt);
+            OutputParam.Direction = ParameterDirection.Output;
+            cmd.Parameters.Add(OutputParam);
+
+            //Ejecutar el Stored procedure
+            cmd.ExecuteNonQuery();
+            conn.Close();
+
+            IdMedicion = long.Parse(cmd.Parameters["@Retorno"].Value.ToString());
+
+            //Mensaje de exito
+            //Console.Text += "Ejecucion exitosa. ObtenerIdMedicionDadoIdMuestraYParametro --> " + IdMedicion.ToString() + Environment.NewLine;
+            return IdMedicion;
+        }
+        catch (Exception ex)
+        {
+            //Console.Text += "Error en ObtenerIdMedicionDadoIdMuestraYParametro: " + ex.Message + Environment.NewLine;
+            return 0;
+        }
+        finally
+        {
+            //Cerrar conexion
+            if (conn != null)
+            {
+                conn.Close();
+            }
+        }
+    }
+
+    public bool GuardarLecturasDeLasVariables(long IdVariableParametro, long IdMedicion, decimal ValorMedidoNumerico, string ValorMedidoCadena, System.Windows.Forms.TextBox Console, string sCadCnx)
+    {
+        SqlConnection conn = null;
+        try
+        {
+            //Abrir Conexion
+            conn = new SqlConnection(sCadCnx);
+            conn.Open();
+
+            //Definir el comando (SP)
+            SqlCommand cmd = new SqlCommand("GuardarLecturasDeLasVariables", conn);
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            //Parametros
+            cmd.Parameters.Add(new SqlParameter("@IdVariableParametro", IdVariableParametro));
+            cmd.Parameters.Add(new SqlParameter("@IdMedicion", IdMedicion));
+            cmd.Parameters.Add(new SqlParameter("@ValorMedidoNumerico", ValorMedidoNumerico));
+            cmd.Parameters.Add(new SqlParameter("@ValorMedidoCadena", ValorMedidoCadena));
+
+            //Ejecutar el Stored procedure
+            cmd.ExecuteNonQuery();
+            conn.Close();
+
+            //Mensaje de exito
+            if (Console != null) Console.Text += "Ejecucion exitosa. Id Variable Parametro: " + IdVariableParametro + " Id Medicion: " + IdMedicion.ToString() + " Valor Medido Numerico: " + ValorMedidoNumerico + Environment.NewLine;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.Text += "Error: " + ex.Message + Environment.NewLine;
+            //Mensaje de error
+            if (Console != null) Console.Text += "Ejecucion fallida GuardarLecturasDeLasVariables..." + Environment.NewLine; ;
+            return false;
+        }
+        finally
+        {
+            //Cerrar conexion
+            if (conn != null)
+            {
+                conn.Close();
+            }
+        }
+    }
+
+}
